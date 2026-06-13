@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC Register</title>
+</head>
+<body>
+
+    <h1>BMLC Registration</h1>
+
+    <form action="/register" method="POST">
+
+        <input type="text" name="fullname" placeholder="Full Name" required>
+        <br><br>
+
+        <input type="email" name="email" placeholder="Email" required>
+        <br><br>
+
+        <input type="password" name="password" placeholder="Password" required>
+        <br><br>
+
+        <select name="role" required>
+
+            <option value="">Select Role</option>
+
+            <option value="student">Student</option>
+
+            <option value="tutor">Tutor</option>
+
+            <option value="parent">Parent</option>
+
+        </select>
+
+        <br><br>
+
+        <input type="text" name="referral_code" placeholder="Referral Code (Optional)">
+
+        <br><br>
+
+        <button type="submit">Register</button>
+
+    </form>
+
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Record Payment</title>
+</head>
+<body>
+
+    <h1>Record Payment</h1>
+
+    <form action="/record-payment" method="POST">
+
+        <input
+            type="number"
+            name="student_id"
+            placeholder="Student ID"
+            required
+        >
+
+        <br><br>
+
+        <input
+            type="number"
+            step="0.01"
+            name="amount"
+            placeholder="Amount"
+            required
+        >
+
+        <br><br>
+
+        <select name="payment_source">
+
+            <option value="bm">
+                BM Student
+            </option>
+
+            <option value="tutor">
+                Tutor Referral Student
+            </option>
+
+        </select>
+
+        <br><br>
+
+        <button type="submit">
+            Record Payment
+        </button>
+
+    </form>
+
+</body>
+</html>

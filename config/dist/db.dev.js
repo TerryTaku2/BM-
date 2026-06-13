@@ -1,0 +1,21 @@
+"use strict";
+
+var _require = require("pg"),
+    Pool = _require.Pool;
+
+require("dotenv").config();
+
+var pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT
+});
+pool.connect().then(function () {
+  console.log("PostgreSQL Connected Successfully");
+})["catch"](function (err) {
+  console.log(err.message);
+});
+module.exports = pool;
+//# sourceMappingURL=db.dev.js.map

@@ -171,6 +171,56 @@ app.get("/api/my-students", protectAPI, async (req, res) => {
 // API: GET TUTOR INFO (referral code etc.)
 // ======================================
 
+// ======================================
+// API: GET ALL USERS (admin/superadmin)
+// ======================================
+
+app.get("/api/users", protectAPI, async (req, res) => {
+    try {
+        const result = await db.query(
+            "SELECT id, fullname, email, role, referral_code, created_at FROM users ORDER BY created_at DESC"
+        );
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch users" });
+    }
+});
+
+
+// ======================================
+// API: UPDATE USER ROLE (admin/superadmin)
+// ======================================
+
+app.patch("/api/users/:id/role", protectAPI, async (req, res) => {
+    try {
+        const { role } = req.body;
+        const targetId = parseInt(req.params.id);
+        const requesterId = req.user.id;
+        const requesterRole = req.user.role;
+
+        const allowed = ["student", "tutor", "parent", "admin", "superadmin"];
+        if (!allowed.includes(role)) {
+            return res.status(400).json({ message: "Invalid role" });
+        }
+
+        // Only superadmin can assign superadmin role
+        if (role === "superadmin" && requesterRole !== "superadmin") {
+            return res.status(403).json({ message: "Only a superadmin can assign the superadmin role" });
+        }
+
+        // Prevent admin from changing their own role
+        if (targetId === requesterId) {
+            return res.status(400).json({ message: "You cannot change your own role" });
+        }
+
+        await db.query("UPDATE users SET role = $1 WHERE id = $2", [role, targetId]);
+        res.json({ message: "Role updated successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to update role" });
+    }
+});
+
+
 app.get("/api/tutor-info", protectAPI, async (req, res) => {
     try {
         const result = await db.query(
@@ -349,6 +399,10 @@ app.get("/community/post/:id", protect, (req, res) => {
 
 app.get("/financial-report", protect, requireRole("admin", "superadmin"), (req, res) => {
     res.sendFile(path.join(__dirname, "views", "financialReport.html"));
+});
+
+app.get("/manage-users", protect, requireRole("admin", "superadmin"), (req, res) => {
+    res.sendFile(path.join(__dirname, "views", "manageUsers.html"));
 });
 
 app.get("/receipt/:id", protect, requireRole("admin", "superadmin"), (req, res) => {

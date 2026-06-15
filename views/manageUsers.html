@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Manage Users</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/admin-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/admin-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>Manage Users</h1>
+        <p>Promote or change roles for any user on the platform</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="totalUsers">—</div>
+            <div class="stat-label">Total Users</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="totalStudents">—</div>
+            <div class="stat-label">Students</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="totalTutors">—</div>
+            <div class="stat-label">Tutors</div>
+        </div>
+        <div class="stat-card purple">
+            <div class="stat-value" id="totalAdmins">—</div>
+            <div class="stat-label">Admins</div>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:1rem">
+        <input type="text" id="searchBox" placeholder="Search name or email..."
+            style="flex:1;min-width:200px;padding:0.6rem 0.9rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.88rem">
+        <select id="filterRole" style="padding:0.6rem 0.9rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.88rem">
+            <option value="">All Roles</option>
+            <option value="student">Student</option>
+            <option value="tutor">Tutor</option>
+            <option value="parent">Parent</option>
+            <option value="admin">Admin</option>
+            <option value="superadmin">Super Admin</option>
+        </select>
+    </div>
+
+    <div class="alert alert-success" id="successMsg"></div>
+    <div class="alert alert-error"   id="errorMsg"></div>
+
+    <div class="card">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Current Role</th>
+                        <th>Referral Code</th>
+                        <th>Joined</th>
+                        <th>Change Role</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTable">
+                    <tr class="loading-row"><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let allUsers = [];
+    let myRole   = "";
+    let myId     = null;
+
+    const roleColors = {
+        student:    "badge-blue",
+        tutor:      "badge-green",
+        parent:     "",
+        admin:      "badge-orange",
+        superadmin: "badge-purple"
+    };
+
+    async function loadMe() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        myRole = user.role;
+        myId   = user.id;
+    }
+
+    async function loadUsers() {
+        try {
+            const res = await fetch("/api/users");
+            if (res.status === 401) return window.location.href = "/login";
+            allUsers = await res.json();
+
+            document.getElementById("totalUsers").textContent    = allUsers.length;
+            document.getElementById("totalStudents").textContent = allUsers.filter(u => u.role === "student").length;
+            document.getElementById("totalTutors").textContent   = allUsers.filter(u => u.role === "tutor").length;
+            document.getElementById("totalAdmins").textContent   = allUsers.filter(u => u.role === "admin" || u.role === "superadmin").length;
+
+            renderTable(allUsers);
+        } catch {
+            document.getElementById("usersTable").innerHTML =
+                '<tr><td colspan="6" class="empty-state">Failed to load users.</td></tr>';
+        }
+    }
+
+    function renderTable(users) {
+        const tbody = document.getElementById("usersTable");
+
+        if (!users.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(u => {
+            const isSelf = u.id === myId;
+
+            // Build role options
+            const roles = ["student", "tutor", "parent", "admin", "superadmin"];
+            const options = roles.map(r => {
+                const disabled = (r === "superadmin" && myRole !== "superadmin") ? "disabled" : "";
+                const selected = r === u.role ? "selected" : "";
+                return `<option value="${r}" ${selected} ${disabled}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`;
+            }).join("");
+
+            return `
+                <tr>
+                    <td><strong>${u.fullname}</strong></td>
+                    <td style="font-size:0.85rem;color:#64748b">${u.email}</td>
+                    <td><span class="badge ${roleColors[u.role] || ""}">${u.role}</span></td>
+                    <td>${u.referral_code ? `<span class="badge badge-green">${u.referral_code}</span>` : '<span style="color:#94a3b8">—</span>'}</td>
+                    <td style="font-size:0.82rem;color:#64748b">${new Date(u.created_at).toLocaleDateString()}</td>
+                    <td>
+                        ${isSelf
+                            ? '<span style="color:#94a3b8;font-size:0.82rem">You</span>'
+                            : `<div style="display:flex;gap:0.5rem;align-items:center">
+                                <select id="role_${u.id}" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.82rem">
+                                    ${options}
+                                </select>
+                                <button onclick="updateRole(${u.id})"
+                                    style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:0.35rem 0.8rem;cursor:pointer;font-size:0.82rem">
+                                    Save
+                                </button>
+                            </div>`
+                        }
+                    </td>
+                </tr>
+            `;
+        }).join("");
+    }
+
+    async function updateRole(userId) {
+        const role = document.getElementById(`role_${userId}`).value;
+        const success = document.getElementById("successMsg");
+        const error   = document.getElementById("errorMsg");
+
+        success.classList.remove("show");
+        error.classList.remove("show");
+
+        try {
+            const res = await fetch(`/api/users/${userId}/role`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                success.textContent = data.message;
+                success.classList.add("show");
+                setTimeout(() => success.classList.remove("show"), 3000);
+                loadUsers();
+            } else {
+                error.textContent = data.message || "Failed to update role";
+                error.classList.add("show");
+            }
+        } catch {
+            error.textContent = "Network error.";
+            error.classList.add("show");
+        }
+    }
+
+    function applyFilters() {
+        const q    = document.getElementById("searchBox").value.toLowerCase();
+        const role = document.getElementById("filterRole").value;
+
+        const filtered = allUsers.filter(u => {
+            const matchSearch = u.fullname.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+            const matchRole   = role ? u.role === role : true;
+            return matchSearch && matchRole;
+        });
+
+        renderTable(filtered);
+    }
+
+    document.getElementById("searchBox").addEventListener("input", applyFilters);
+    document.getElementById("filterRole").addEventListener("change", applyFilters);
+
+    async function init() {
+        await loadMe();
+        await loadUsers();
+    }
+
+    init();
+</script>
+
+</body>
+</html>

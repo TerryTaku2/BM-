@@ -1,11 +1,208 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Super Admin Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Super Admin Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>Super Admin Dashboard</h1>
+<nav class="navbar">
+    <a href="/superadmin-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <span id="userName">Loading...</span>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1 id="welcomeText">Super Admin Dashboard</h1>
+        <p>Full system overview — subjects, enrollments, payments, and users</p>
+    </div>
+
+    <div class="action-links">
+        <a href="/add-subject">&#43; Add Subject</a>
+        <a href="/enroll-student">&#43; Enroll Student</a>
+        <a href="/record-payment">&#43; Record Payment</a>
+        <a href="/register">&#43; Register User</a>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="statSubjects">—</div>
+            <div class="stat-label">Subjects</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="statEnrollments">—</div>
+            <div class="stat-label">Enrollments</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="statPayments">—</div>
+            <div class="stat-label">Payments</div>
+        </div>
+        <div class="stat-card purple">
+            <div class="stat-value" id="statRevenue">—</div>
+            <div class="stat-label">Total BM Revenue</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>All Enrollments</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student</th>
+                        <th>Subject</th>
+                        <th>Level</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="enrollmentsTable">
+                    <tr class="loading-row"><td colspan="5">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>All Payments</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student</th>
+                        <th>Amount</th>
+                        <th>Tutor Commission</th>
+                        <th>BM Profit</th>
+                        <th>Source</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="paymentsTable">
+                    <tr class="loading-row"><td colspan="7">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>All Subjects</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Subject Name</th>
+                        <th>Code</th>
+                        <th>Level</th>
+                    </tr>
+                </thead>
+                <tbody id="subjectsTable">
+                    <tr class="loading-row"><td colspan="4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function fmt(n) {
+        return "$" + parseFloat(n).toFixed(2);
+    }
+
+    async function loadUser() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        document.getElementById("userName").textContent = user.fullname;
+        document.getElementById("welcomeText").textContent = `Welcome, ${user.fullname}`;
+    }
+
+    async function loadSubjects() {
+        const tbody = document.getElementById("subjectsTable");
+        const res = await fetch("/subjects");
+        if (res.status === 401) return window.location.href = "/login";
+        const rows = await res.json();
+        document.getElementById("statSubjects").textContent = rows.length;
+
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No subjects yet.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${r.id}</td>
+                <td><strong>${r.subject_name}</strong></td>
+                <td><span class="badge badge-blue">${r.subject_code}</span></td>
+                <td>${r.level}</td>
+            </tr>
+        `).join("");
+    }
+
+    async function loadEnrollments() {
+        const tbody = document.getElementById("enrollmentsTable");
+        const res = await fetch("/enrollments");
+        if (res.status === 401) return window.location.href = "/login";
+        const rows = await res.json();
+        document.getElementById("statEnrollments").textContent = rows.length;
+
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No enrollments yet.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${r.id}</td>
+                <td>${r.student_name}</td>
+                <td>${r.subject_name}</td>
+                <td>${r.level}</td>
+                <td>${new Date(r.created_at).toLocaleDateString()}</td>
+            </tr>
+        `).join("");
+    }
+
+    async function loadPayments() {
+        const tbody = document.getElementById("paymentsTable");
+        const res = await fetch("/payments");
+        if (res.status === 401) return window.location.href = "/login";
+        const rows = await res.json();
+        document.getElementById("statPayments").textContent = rows.length;
+
+        const totalRevenue = rows.reduce((sum, r) => sum + parseFloat(r.bm_profit || 0), 0);
+        document.getElementById("statRevenue").textContent = fmt(totalRevenue);
+
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No payments yet.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${r.id}</td>
+                <td>${r.student_name}</td>
+                <td>${fmt(r.amount)}</td>
+                <td>${fmt(r.tutor_commission)}</td>
+                <td>${fmt(r.bm_profit)}</td>
+                <td><span class="badge ${r.payment_source === 'bm' ? 'badge-blue' : 'badge-green'}">${r.payment_source.toUpperCase()}</span></td>
+                <td>${new Date(r.created_at).toLocaleDateString()}</td>
+            </tr>
+        `).join("");
+    }
+
+    loadUser();
+    loadSubjects();
+    loadEnrollments();
+    loadPayments();
+</script>
 
 </body>
 </html>

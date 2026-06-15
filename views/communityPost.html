@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Discussion</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .post-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+        .post-title-h { font-size: 1.4rem; font-weight: 700; color: #1e293b; margin-bottom: 0.6rem; line-height: 1.35; }
+        .post-meta-line { font-size: 0.82rem; color: #94a3b8; margin-bottom: 1.2rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+        .post-body-text { color: #334155; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+        .post-actions { display: flex; gap: 1rem; margin-top: 1.2rem; flex-wrap: wrap; align-items: center; }
+        .like-btn {
+            background: none; border: 1px solid #e2e8f0; border-radius: 6px;
+            padding: 0.4rem 0.9rem; cursor: pointer; font-size: 0.88rem;
+            color: #64748b; transition: all 0.15s;
+        }
+        .like-btn.liked { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+        .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.82rem; }
+        .pin-btn { background: none; border: none; color: #f59e0b; cursor: pointer; font-size: 0.82rem; }
+
+        .replies-section { margin-top: 1.5rem; }
+        .reply-card {
+            background: #f8fafc;
+            border: 1px solid #f1f5f9;
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            margin-bottom: 0.8rem;
+        }
+        .reply-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.4rem; }
+        .reply-author { font-weight: 600; font-size: 0.88rem; color: #1e293b; }
+        .reply-time { font-size: 0.75rem; color: #94a3b8; }
+        .reply-body { color: #334155; font-size: 0.9rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+        .tutor-badge { background: #fef3c7; color: #92400e; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+        .admin-badge { background: #ede9fe; color: #5b21b6; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/community" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a id="backLink" href="/community" class="nav-btn">&#8592; Channel</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:760px">
+
+    <!-- POST -->
+    <div id="postContainer">
+        <p style="color:#94a3b8;text-align:center;padding:3rem">Loading...</p>
+    </div>
+
+    <!-- REPLIES -->
+    <div class="replies-section">
+        <h3 id="replyCount" style="margin-bottom:1rem;color:#1e293b"></h3>
+        <div id="repliesList"></div>
+
+        <!-- REPLY FORM -->
+        <div class="card" style="margin-top:1rem">
+            <h3 style="margin-bottom:1rem;font-size:1rem">Add a Reply</h3>
+            <div class="alert alert-success" id="replySuccess"></div>
+            <div class="alert alert-error"   id="replyError"></div>
+            <div class="form-group">
+                <textarea id="replyBody" rows="4" placeholder="Share your thoughts, answer the question, or add to the discussion..." style="resize:vertical"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="submitReply()">Post Reply</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const postId = window.location.pathname.split("/").pop();
+    let myUserId = null;
+    let myRole   = null;
+    let subjectId = null;
+    let likedByMe = false;
+    let likeCount = 0;
+
+    function escHtml(str) {
+        const d = document.createElement("div");
+        d.textContent = str || "";
+        return d.innerHTML;
+    }
+
+    function timeAgo(dateStr) {
+        const diff = (Date.now() - new Date(dateStr)) / 1000;
+        if (diff < 60) return "just now";
+        if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+        if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+        return Math.floor(diff / 86400) + "d ago";
+    }
+
+    function roleBadge(role) {
+        if (role === "tutor") return '<span class="tutor-badge">TUTOR</span>';
+        if (role === "admin" || role === "superadmin") return '<span class="admin-badge">ADMIN</span>';
+        return "";
+    }
+
+    async function loadMe() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        myUserId = user.id;
+        myRole   = user.role;
+    }
+
+    async function loadPost() {
+        try {
+            const res = await fetch(`/community/posts/${postId}`);
+            if (!res.ok) {
+                document.getElementById("postContainer").innerHTML =
+                    '<p style="color:#ef4444;text-align:center;padding:3rem">Post not found or access denied.</p>';
+                return;
+            }
+            const { post, replies } = await res.json();
+
+            subjectId = post.subject_id;
+            likedByMe = post.liked_by_me;
+            likeCount = parseInt(post.like_count);
+
+            document.getElementById("backLink").href = `/community/subject/${subjectId}`;
+            document.title = `${post.title} — BMLC Community`;
+
+            const canModerate = ["admin", "superadmin", "tutor"].includes(myRole);
+            const isAuthor    = post.author_id === myUserId;
+
+            document.getElementById("postContainer").innerHTML = `
+                <div class="post-card">
+                    ${post.is_pinned ? '<div style="color:#f59e0b;font-size:0.82rem;font-weight:600;margin-bottom:0.5rem">&#128204; PINNED POST</div>' : ""}
+                    <div class="post-title-h">${escHtml(post.title)}</div>
+                    <div class="post-meta-line">
+                        <span>&#128100; <strong>${post.author_name}</strong> ${roleBadge(post.author_role)}</span>
+                        <span>&#128336; ${timeAgo(post.created_at)}</span>
+                        <span class="badge badge-blue" style="font-size:0.72rem">${post.subject_name}</span>
+                    </div>
+                    <div class="post-body-text">${escHtml(post.body)}</div>
+                    <div class="post-actions">
+                        <button class="like-btn${likedByMe ? " liked" : ""}" id="likeBtn" onclick="toggleLike()">
+                            &#10084; <span id="likeNum">${likeCount}</span>
+                        </button>
+                        ${canModerate ? `<button class="pin-btn" onclick="togglePin()">&#128204; ${post.is_pinned ? "Unpin" : "Pin"}</button>` : ""}
+                        ${(isAuthor || canModerate) ? `<button class="delete-btn" onclick="deletePost()">&#128465; Delete Post</button>` : ""}
+                    </div>
+                </div>
+            `;
+
+            renderReplies(replies);
+        } catch {
+            document.getElementById("postContainer").innerHTML =
+                '<p style="color:#ef4444;text-align:center;padding:3rem">Failed to load post.</p>';
+        }
+    }
+
+    function renderReplies(replies) {
+        const count = document.getElementById("replyCount");
+        const list  = document.getElementById("repliesList");
+
+        count.textContent = `${replies.length} Repl${replies.length !== 1 ? "ies" : "y"}`;
+
+        if (!replies.length) {
+            list.innerHTML = '<p style="color:#94a3b8;font-size:0.9rem;margin-bottom:1rem">No replies yet. Be the first to respond!</p>';
+            return;
+        }
+
+        list.innerHTML = replies.map(r => {
+            const canDelete = (r.author_id === myUserId || ["admin", "superadmin"].includes(myRole));
+            return `
+                <div class="reply-card" id="reply-${r.id}">
+                    <div class="reply-header">
+                        <span class="reply-author">&#128100; ${escHtml(r.author_name)} ${roleBadge(r.author_role)}</span>
+                        <div style="display:flex;gap:0.8rem;align-items:center">
+                            <span class="reply-time">${timeAgo(r.created_at)}</span>
+                            ${canDelete ? `<button class="delete-btn" onclick="deleteReply(${r.id})">&#128465;</button>` : ""}
+                        </div>
+                    </div>
+                    <div class="reply-body">${escHtml(r.body)}</div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    async function submitReply() {
+        const body    = document.getElementById("replyBody").value.trim();
+        const success = document.getElementById("replySuccess");
+        const error   = document.getElementById("replyError");
+
+        success.classList.remove("show");
+        error.classList.remove("show");
+
+        if (!body) {
+            error.textContent = "Please write a reply.";
+            error.classList.add("show");
+            return;
+        }
+
+        try {
+            const res = await fetch("/community/replies", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ post_id: postId, body })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                document.getElementById("replyBody").value = "";
+                success.textContent = "Reply posted!";
+                success.classList.add("show");
+                // Reload post to get fresh replies
+                setTimeout(() => { success.classList.remove("show"); loadPost(); }, 800);
+            } else {
+                error.textContent = data.message || "Failed to reply";
+                error.classList.add("show");
+            }
+        } catch {
+            error.textContent = "Network error.";
+            error.classList.add("show");
+        }
+    }
+
+    async function toggleLike() {
+        try {
+            const res = await fetch("/community/likes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ post_id: postId })
+            });
+            const data = await res.json();
+            likedByMe = data.liked;
+            likeCount += data.liked ? 1 : -1;
+
+            const btn = document.getElementById("likeBtn");
+            btn.classList.toggle("liked", likedByMe);
+            document.getElementById("likeNum").textContent = likeCount;
+        } catch {}
+    }
+
+    async function togglePin() {
+        try {
+            await fetch(`/community/posts/${postId}/pin`, { method: "PATCH" });
+            loadPost();
+        } catch {}
+    }
+
+    async function deletePost() {
+        if (!confirm("Delete this post and all its replies?")) return;
+        try {
+            const res = await fetch(`/community/posts/${postId}`, { method: "DELETE" });
+            if (res.ok) window.location.href = subjectId ? `/community/subject/${subjectId}` : "/community";
+        } catch {}
+    }
+
+    async function deleteReply(id) {
+        if (!confirm("Delete this reply?")) return;
+        try {
+            const res = await fetch(`/community/replies/${id}`, { method: "DELETE" });
+            if (res.ok) document.getElementById(`reply-${id}`).remove();
+        } catch {}
+    }
+
+    async function init() {
+        await loadMe();
+        await loadPost();
+    }
+
+    init();
+</script>
+
+</body>
+</html>

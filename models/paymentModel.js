@@ -12,6 +12,8 @@ const createPaymentsTable = async () => {
 
                 student_id INTEGER REFERENCES users(id),
 
+                tutor_id INTEGER REFERENCES users(id),
+
                 amount DECIMAL(10,2) NOT NULL,
 
                 tutor_commission DECIMAL(10,2),
@@ -27,6 +29,8 @@ const createPaymentsTable = async () => {
         `;
 
         await db.query(query);
+
+        await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS tutor_id INTEGER REFERENCES users(id)`);
 
         console.log("Payments table created successfully");
 

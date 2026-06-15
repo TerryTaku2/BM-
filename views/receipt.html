@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Payment Receipt</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f1f5f9; display: flex; justify-content: center; padding: 2rem; }
+        .receipt { background: #fff; width: 480px; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .logo { text-align: center; margin-bottom: 1.5rem; border-bottom: 2px solid #1e40af; padding-bottom: 1rem; }
+        .logo h1 { color: #1e40af; font-size: 1.6rem; letter-spacing: 2px; }
+        .logo p { color: #64748b; font-size: 0.8rem; margin-top: 0.2rem; }
+        .receipt-title { text-align: center; font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 1px; }
+        .receipt-row { display: flex; justify-content: space-between; padding: 0.55rem 0; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .receipt-row .label { color: #64748b; }
+        .receipt-row .value { font-weight: 600; color: #1e293b; }
+        .divider { border: none; border-top: 2px dashed #e2e8f0; margin: 1rem 0; }
+        .total-row { display: flex; justify-content: space-between; padding: 0.7rem 0; font-size: 1rem; font-weight: 700; }
+        .total-row .label { color: #1e293b; }
+        .total-row .value { color: #16a34a; font-size: 1.2rem; }
+        .commission-box { background: #f8fafc; border-radius: 8px; padding: 1rem; margin: 1rem 0; font-size: 0.85rem; }
+        .commission-box .row { display: flex; justify-content: space-between; padding: 0.3rem 0; }
+        .footer { text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; font-size: 0.78rem; color: #94a3b8; }
+        .print-btn { display: block; width: 100%; padding: 0.8rem; background: #1e40af; color: #fff; border: none; border-radius: 8px; font-size: 0.95rem; cursor: pointer; margin-top: 1.5rem; }
+        @media print {
+            body { background: #fff; padding: 0; }
+            .receipt { box-shadow: none; border-radius: 0; }
+            .print-btn { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="receipt" id="receipt">
+    <div class="logo">
+        <h1>BMLC</h1>
+        <p>BM Tutorials E-Learning Management System</p>
+    </div>
+
+    <div class="receipt-title">Payment Receipt</div>
+
+    <div id="content">
+        <p style="text-align:center;color:#94a3b8">Loading receipt...</p>
+    </div>
+
+    <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<script>
+    const id = window.location.pathname.split("/").pop();
+
+    async function loadReceipt() {
+        try {
+            const res = await fetch(`/api/payments/${id}`);
+            if (!res.ok) {
+                document.getElementById("content").innerHTML = '<p style="text-align:center;color:#ef4444">Receipt not found.</p>';
+                return;
+            }
+            const p = await res.json();
+
+            const sourceLabel = p.payment_source === "tutor"
+                ? `Tutor Referral (${p.referral_code})`
+                : "BM Direct";
+
+            document.title = `Receipt #${p.id} — BMLC`;
+
+            document.getElementById("content").innerHTML = `
+                <div class="receipt-row">
+                    <span class="label">Receipt No.</span>
+                    <span class="value">#${String(p.id).padStart(6, "0")}</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="label">Date</span>
+                    <span class="value">${new Date(p.created_at).toLocaleDateString("en-GB", { day:"2-digit", month:"long", year:"numeric" })}</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="label">Student</span>
+                    <span class="value">${p.student_name}</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="label">Email</span>
+                    <span class="value">${p.student_email}</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="label">Payment Source</span>
+                    <span class="value">${sourceLabel}</span>
+                </div>
+                ${p.tutor_name ? `
+                <div class="receipt-row">
+                    <span class="label">Tutor</span>
+                    <span class="value">${p.tutor_name}</span>
+                </div>` : ""}
+
+                <hr class="divider">
+
+                <div class="total-row">
+                    <span class="label">Amount Paid</span>
+                    <span class="value">$${parseFloat(p.amount).toFixed(2)}</span>
+                </div>
+
+                <div class="commission-box">
+                    <strong style="font-size:0.82rem;color:#475569;display:block;margin-bottom:0.5rem">Commission Breakdown</strong>
+                    <div class="row">
+                        <span style="color:#64748b">Tutor Commission (${p.payment_source === "tutor" ? "60" : "40"}%)</span>
+                        <span style="font-weight:600">$${parseFloat(p.tutor_commission).toFixed(2)}</span>
+                    </div>
+                    <div class="row">
+                        <span style="color:#64748b">BM Profit (${p.payment_source === "tutor" ? "40" : "60"}%)</span>
+                        <span style="font-weight:600">$${parseFloat(p.bm_profit).toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    Thank you for choosing BM Tutorials.<br>
+                    This is a computer-generated receipt and requires no signature.
+                </div>
+            `;
+        } catch (e) {
+            document.getElementById("content").innerHTML = '<p style="text-align:center;color:#ef4444">Failed to load receipt.</p>';
+        }
+    }
+
+    loadReceipt();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — My Attendance</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/student-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/student-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>My Attendance</h1>
+        <p>Track your lesson attendance record</p>
+    </div>
+
+    <!-- Mark Attendance -->
+    <div class="card" style="max-width:500px">
+        <h2>Mark Today's Attendance</h2>
+        <div class="alert alert-success" id="markSuccess"></div>
+        <div class="alert alert-error" id="markError"></div>
+
+        <div class="form-group">
+            <label for="subject_id">Select Subject</label>
+            <select id="subject_id">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" onclick="markAttendance()">Mark Present</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="totalLessons">—</div>
+            <div class="stat-label">Total Lessons</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="presentCount">—</div>
+            <div class="stat-label">Present</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="attendanceRate">—</div>
+            <div class="stat-label">Attendance Rate</div>
+        </div>
+    </div>
+
+    <!-- Attendance Records -->
+    <div class="card">
+        <h2>Attendance History</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th>Joined At</th>
+                        <th>Left At</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTable">
+                    <tr class="loading-row"><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    async function loadSubjects() {
+        const sel = document.getElementById("subject_id");
+        try {
+            const res = await fetch("/my-enrollments");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+            sel.innerHTML = '<option value="">Select subject</option>' +
+                rows.map(r => `<option value="${r.subject_id || r.id}">${r.subject_name}</option>`).join("");
+        } catch {
+            sel.innerHTML = '<option value="">Failed to load</option>';
+        }
+    }
+
+    async function loadAttendance() {
+        const tbody = document.getElementById("attendanceTable");
+        try {
+            const res = await fetch("/attendance/me");
+            if (!res.ok) return;
+            const data = await res.json();
+
+            document.getElementById("totalLessons").textContent    = data.total;
+            document.getElementById("presentCount").textContent     = data.present;
+            document.getElementById("attendanceRate").textContent   = data.attendance_rate + "%";
+
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No attendance records yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.records.map(r => `
+                <tr>
+                    <td><strong>${r.subject_name}</strong></td>
+                    <td>${new Date(r.lesson_date).toLocaleDateString()}</td>
+                    <td>${r.joined_at ? new Date(r.joined_at).toLocaleTimeString() : "—"}</td>
+                    <td>${r.left_at ? new Date(r.left_at).toLocaleTimeString() : "—"}</td>
+                    <td>${r.duration_minutes != null ? r.duration_minutes + " min" : "—"}</td>
+                    <td><span class="badge ${r.status === "present" ? "badge-green" : "badge-blue"}">${r.status}</span></td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load records.</td></tr>';
+        }
+    }
+
+    async function markAttendance() {
+        const subject_id = document.getElementById("subject_id").value;
+        const success = document.getElementById("markSuccess");
+        const error   = document.getElementById("markError");
+
+        success.classList.remove("show");
+        error.classList.remove("show");
+
+        if (!subject_id) {
+            error.textContent = "Please select a subject.";
+            error.classList.add("show");
+            return;
+        }
+
+        try {
+            const res = await fetch("/attendance/mark", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subject_id })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                success.textContent = data.message;
+                success.classList.add("show");
+                loadAttendance();
+            } else {
+                error.textContent = data.message;
+                error.classList.add("show");
+            }
+        } catch {
+            error.textContent = "Network error.";
+            error.classList.add("show");
+        }
+    }
+
+    loadSubjects();
+    loadAttendance();
+</script>
+
+</body>
+</html>

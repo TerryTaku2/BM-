@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Create Test</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .question-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:1.2rem; margin-bottom:1rem; position:relative; }
+        .question-card h4 { margin-bottom:0.8rem; color:#1e293b; font-size:0.95rem; }
+        .option-row { display:flex; gap:0.5rem; margin-bottom:0.5rem; }
+        .option-row input[type=text] { flex:1; }
+        .remove-q { position:absolute; top:0.8rem; right:0.8rem; background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1rem; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/tutor-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/tutor-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:750px">
+    <div class="card">
+        <h2>Create Test / Quiz</h2>
+
+        <div class="alert alert-success" id="successMsg"></div>
+        <div class="alert alert-error"   id="errorMsg"></div>
+
+        <form id="testForm">
+            <div class="form-group">
+                <label>Subject</label>
+                <select id="subject_id" required>
+                    <option value="">Loading subjects...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Test Title</label>
+                <input type="text" id="title" placeholder="e.g. Chapter 3 Quiz" required>
+            </div>
+            <div class="form-group">
+                <label>Description (optional)</label>
+                <textarea id="description" rows="2" placeholder="Instructions for students..." style="resize:vertical"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Duration (minutes)</label>
+                <input type="number" id="duration" value="60" min="5" max="300">
+            </div>
+
+            <hr style="margin:1.5rem 0;border-color:#e2e8f0">
+            <h3 style="margin-bottom:1rem">Questions</h3>
+
+            <div id="questionsContainer"></div>
+
+            <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:1.5rem">
+                <button type="button" class="btn" onclick="addQuestion('multiple_choice')" style="background:#3b82f6;color:#fff">+ MCQ</button>
+                <button type="button" class="btn" onclick="addQuestion('true_false')"      style="background:#8b5cf6;color:#fff">+ True/False</button>
+                <button type="button" class="btn" onclick="addQuestion('short_answer')"    style="background:#f59e0b;color:#fff">+ Short Answer</button>
+                <button type="button" class="btn" onclick="addQuestion('essay')"           style="background:#64748b;color:#fff">+ Essay</button>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="submitBtn">Save Test (Draft)</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    let questionCount = 0;
+
+    async function loadSubjects() {
+        const sel = document.getElementById("subject_id");
+        try {
+            const res = await fetch("/subjects");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+            sel.innerHTML = '<option value="">Select subject</option>' +
+                rows.map(r => `<option value="${r.id}">${r.subject_name} (${r.level})</option>`).join("");
+        } catch {
+            sel.innerHTML = '<option value="">Failed to load</option>';
+        }
+    }
+
+    function addQuestion(type) {
+        questionCount++;
+        const container = document.getElementById("questionsContainer");
+        const div = document.createElement("div");
+        div.className = "question-card";
+        div.dataset.type = type;
+        div.dataset.num = questionCount;
+
+        let optionsHtml = "";
+        if (type === "multiple_choice") {
+            optionsHtml = `
+                <label style="font-size:0.82rem;color:#64748b">Options (mark correct with ✓)</label>
+                <div class="options-list">
+                    ${["A","B","C","D"].map(l => `
+                        <div class="option-row">
+                            <input type="radio" name="correct_${questionCount}" value="${l}" style="margin-top:0.4rem">
+                            <input type="text" placeholder="Option ${l}" class="opt-input" data-label="${l}">
+                        </div>
+                    `).join("")}
+                </div>
+            `;
+        } else if (type === "true_false") {
+            optionsHtml = `
+                <label style="font-size:0.82rem;color:#64748b">Correct Answer</label>
+                <select class="tf-select" style="width:160px">
+                    <option value="True">True</option>
+                    <option value="False">False</option>
+                </select>
+            `;
+        } else if (type === "short_answer") {
+            optionsHtml = `<input type="text" class="model-answer" placeholder="Model answer (optional)">`;
+        } else {
+            optionsHtml = `<p style="font-size:0.82rem;color:#94a3b8">Essay — marked manually by tutor.</p>`;
+        }
+
+        const typeLabel = { multiple_choice:"Multiple Choice", true_false:"True/False", short_answer:"Short Answer", essay:"Essay" }[type];
+
+        div.innerHTML = `
+            <button type="button" class="remove-q" onclick="this.parentElement.remove()">&#10005;</button>
+            <h4>Q${questionCount}: <span class="badge badge-blue" style="font-size:0.75rem">${typeLabel}</span></h4>
+            <div class="form-group" style="margin-bottom:0.8rem">
+                <textarea class="q-text" rows="2" placeholder="Enter question here..." required style="resize:vertical"></textarea>
+            </div>
+            ${optionsHtml}
+            <div class="form-group" style="margin-top:0.8rem;margin-bottom:0">
+                <label style="font-size:0.82rem;color:#64748b">Marks</label>
+                <input type="number" class="q-marks" value="1" min="1" max="100" style="width:80px">
+            </div>
+        `;
+
+        container.appendChild(div);
+    }
+
+    document.getElementById("testForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const btn = document.getElementById("submitBtn");
+        const successMsg = document.getElementById("successMsg");
+        const errorMsg   = document.getElementById("errorMsg");
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving...';
+        successMsg.classList.remove("show");
+        errorMsg.classList.remove("show");
+
+        const cards = document.querySelectorAll(".question-card");
+        const questions = [];
+
+        for (const card of cards) {
+            const type = card.dataset.type;
+            const question = card.querySelector(".q-text").value.trim();
+            const marks = parseInt(card.querySelector(".q-marks").value) || 1;
+
+            let options = [];
+            let correct_answer = null;
+
+            if (type === "multiple_choice") {
+                const optInputs = card.querySelectorAll(".opt-input");
+                optInputs.forEach(inp => { if (inp.value.trim()) options.push(`${inp.dataset.label}: ${inp.value.trim()}`); });
+                const checked = card.querySelector("input[type=radio]:checked");
+                if (checked) {
+                    const label = checked.value;
+                    const optInp = card.querySelector(`.opt-input[data-label="${label}"]`);
+                    correct_answer = optInp ? `${label}: ${optInp.value.trim()}` : label;
+                }
+            } else if (type === "true_false") {
+                correct_answer = card.querySelector(".tf-select").value;
+            } else if (type === "short_answer") {
+                const ma = card.querySelector(".model-answer");
+                if (ma) correct_answer = ma.value.trim() || null;
+            }
+
+            questions.push({ question, type, options, correct_answer, marks });
+        }
+
+        const body = {
+            subject_id:       document.getElementById("subject_id").value,
+            title:            document.getElementById("title").value.trim(),
+            description:      document.getElementById("description").value.trim(),
+            duration_minutes: parseInt(document.getElementById("duration").value) || 60,
+            questions
+        };
+
+        try {
+            const res = await fetch("/tests", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                successMsg.textContent = `${data.message} (ID: ${data.test_id}) — publish it when ready.`;
+                successMsg.classList.add("show");
+                document.getElementById("testForm").reset();
+                document.getElementById("questionsContainer").innerHTML = "";
+                questionCount = 0;
+            } else {
+                errorMsg.textContent = data.message || "Failed to create test";
+                errorMsg.classList.add("show");
+            }
+        } catch {
+            errorMsg.textContent = "Network error.";
+            errorMsg.classList.add("show");
+        }
+
+        btn.disabled = false;
+        btn.textContent = "Save Test (Draft)";
+    });
+
+    loadSubjects();
+</script>
+
+</body>
+</html>

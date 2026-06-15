@@ -18,6 +18,10 @@ const createUsersTable = async () => {
 
             referral_code VARCHAR(50),
 
+            referred_by INTEGER REFERENCES users(id),
+
+            student_source VARCHAR(10) DEFAULT 'bm',
+
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
         );
@@ -27,6 +31,9 @@ const createUsersTable = async () => {
     try {
 
         await db.query(query);
+
+        await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES users(id)`);
+        await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS student_source VARCHAR(10) DEFAULT 'bm'`);
 
         console.log("Users table created successfully");
 

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Messages</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .msg-tabs { display:flex; gap:0; margin-bottom:1.5rem; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
+        .msg-tab { flex:1; padding:0.7rem; text-align:center; cursor:pointer; background:#f8fafc; font-size:0.9rem; font-weight:500; border:none; color:#64748b; transition:background 0.15s; }
+        .msg-tab.active { background:#1e40af; color:#fff; }
+        .msg-item { padding:1rem; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.1s; }
+        .msg-item:hover { background:#f8fafc; }
+        .msg-item.unread { border-left:3px solid #3b82f6; background:#eff6ff; }
+        .msg-item .from { font-weight:600; font-size:0.9rem; color:#1e293b; }
+        .msg-item .subj { font-size:0.85rem; color:#475569; margin:0.2rem 0; }
+        .msg-item .date { font-size:0.78rem; color:#94a3b8; }
+        .msg-detail { display:none; }
+        .compose-form { display:none; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="javascript:history.back()" class="nav-btn">&#8592; Back</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:800px">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+        <h1 style="font-size:1.5rem;font-weight:700;color:#1e293b">Messages</h1>
+        <button class="btn btn-primary" onclick="showCompose()">+ Compose</button>
+    </div>
+
+    <!-- COMPOSE -->
+    <div class="card compose-form" id="composeForm">
+        <h2>New Message</h2>
+        <div class="alert alert-success" id="sendSuccess"></div>
+        <div class="alert alert-error"   id="sendError"></div>
+
+        <div class="form-group">
+            <label>To</label>
+            <select id="receiver_id">
+                <option value="">Select recipient...</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Subject</label>
+            <input type="text" id="msgSubject" placeholder="Message subject">
+        </div>
+        <div class="form-group">
+            <label>Message</label>
+            <textarea id="msgBody" rows="5" placeholder="Type your message..." style="resize:vertical"></textarea>
+        </div>
+        <div style="display:flex;gap:0.8rem">
+            <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+            <button class="btn" onclick="hideCompose()" style="background:#f1f5f9;color:#475569">Cancel</button>
+        </div>
+    </div>
+
+    <!-- MESSAGE DETAIL -->
+    <div class="card msg-detail" id="msgDetail">
+        <button onclick="closeDetail()" style="background:none;border:none;color:#3b82f6;cursor:pointer;margin-bottom:1rem;font-size:0.9rem">&#8592; Back to inbox</button>
+        <h3 id="detailSubject" style="margin-bottom:0.5rem"></h3>
+        <p style="font-size:0.82rem;color:#64748b;margin-bottom:1rem" id="detailMeta"></p>
+        <div id="detailBody" style="line-height:1.7;color:#1e293b;white-space:pre-wrap"></div>
+        <hr style="margin:1.5rem 0;border-color:#e2e8f0">
+        <button class="btn btn-primary" onclick="replyTo()" style="font-size:0.85rem;padding:0.5rem 1rem">Reply</button>
+    </div>
+
+    <!-- INBOX/SENT LIST -->
+    <div class="card" id="listPanel">
+        <div class="msg-tabs">
+            <button class="msg-tab active" id="tabInbox" onclick="switchTab('inbox')">Inbox <span id="unreadBadge"></span></button>
+            <button class="msg-tab" id="tabSent" onclick="switchTab('sent')">Sent</button>
+        </div>
+
+        <div id="msgList">
+            <p style="text-align:center;color:#94a3b8;padding:2rem">Loading...</p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let currentTab = "inbox";
+    let replyReceiverId = null;
+
+    async function loadContacts() {
+        try {
+            const res = await fetch("/messages/contacts");
+            if (!res.ok) return;
+            const contacts = await res.json();
+            const sel = document.getElementById("receiver_id");
+            sel.innerHTML = '<option value="">Select recipient...</option>' +
+                contacts.map(c => `<option value="${c.id}">${c.fullname} (${c.role})</option>`).join("");
+        } catch {}
+    }
+
+    async function loadUnread() {
+        try {
+            const res = await fetch("/messages/unread-count");
+            const data = await res.json();
+            const badge = document.getElementById("unreadBadge");
+            badge.textContent = data.count > 0 ? `(${data.count})` : "";
+        } catch {}
+    }
+
+    async function switchTab(tab) {
+        currentTab = tab;
+        document.getElementById("tabInbox").classList.toggle("active", tab === "inbox");
+        document.getElementById("tabSent").classList.toggle("active",  tab === "sent");
+        document.getElementById("msgDetail").style.display = "none";
+        document.getElementById("listPanel").style.display = "block";
+        await loadMessages();
+    }
+
+    async function loadMessages() {
+        const list = document.getElementById("msgList");
+        list.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:2rem">Loading...</p>';
+
+        try {
+            const url = currentTab === "inbox" ? "/messages/inbox" : "/messages/sent";
+            const res = await fetch(url);
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+
+            if (!rows.length) {
+                list.innerHTML = `<p style="text-align:center;color:#94a3b8;padding:2rem">${currentTab === "inbox" ? "Your inbox is empty." : "No sent messages."}</p>`;
+                return;
+            }
+
+            list.innerHTML = rows.map(r => {
+                const name = currentTab === "inbox" ? r.sender_name : r.receiver_name;
+                const label = currentTab === "inbox" ? "From" : "To";
+                const unread = currentTab === "inbox" && !r.is_read ? " unread" : "";
+                return `
+                    <div class="msg-item${unread}" onclick="openMessage(${r.id}, '${escHtml(r.subject)}', '${escHtml(name)}', '${escHtml(r.body)}', '${r.created_at}', ${currentTab === "inbox"})">
+                        <div class="from">${label}: ${name}</div>
+                        <div class="subj">${r.subject}</div>
+                        <div class="date">${new Date(r.created_at).toLocaleString()}</div>
+                    </div>
+                `;
+            }).join("");
+        } catch {
+            list.innerHTML = '<p style="text-align:center;color:#ef4444;padding:2rem">Failed to load messages.</p>';
+        }
+    }
+
+    function escHtml(str) {
+        return (str || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    }
+
+    function openMessage(id, subject, from, body, date, isInbox) {
+        document.getElementById("msgDetail").style.display = "block";
+        document.getElementById("listPanel").style.display = "none";
+        document.getElementById("composeForm").style.display = "none";
+
+        document.getElementById("detailSubject").textContent = subject;
+        document.getElementById("detailMeta").textContent    = `${isInbox ? "From" : "To"}: ${from}  •  ${new Date(date).toLocaleString()}`;
+        document.getElementById("detailBody").textContent    = body;
+
+        if (isInbox) {
+            fetch(`/messages/${id}/read`, { method: "PATCH" }).then(() => loadUnread());
+        }
+    }
+
+    function closeDetail() {
+        document.getElementById("msgDetail").style.display = "none";
+        document.getElementById("listPanel").style.display = "block";
+        loadMessages();
+    }
+
+    function replyTo() {
+        showCompose();
+    }
+
+    function showCompose() {
+        document.getElementById("composeForm").style.display = "block";
+        document.getElementById("msgDetail").style.display   = "none";
+        document.getElementById("listPanel").style.display   = "none";
+        document.getElementById("sendSuccess").classList.remove("show");
+        document.getElementById("sendError").classList.remove("show");
+    }
+
+    function hideCompose() {
+        document.getElementById("composeForm").style.display = "none";
+        document.getElementById("listPanel").style.display   = "block";
+    }
+
+    async function sendMessage() {
+        const receiver_id = document.getElementById("receiver_id").value;
+        const subject     = document.getElementById("msgSubject").value.trim();
+        const body        = document.getElementById("msgBody").value.trim();
+
+        const success = document.getElementById("sendSuccess");
+        const error   = document.getElementById("sendError");
+        success.classList.remove("show");
+        error.classList.remove("show");
+
+        if (!receiver_id || !body) {
+            error.textContent = "Please select a recipient and write a message.";
+            error.classList.add("show");
+            return;
+        }
+
+        try {
+            const res = await fetch("/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ receiver_id, subject: subject || "(no subject)", body })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                success.textContent = "Message sent successfully!";
+                success.classList.add("show");
+                document.getElementById("msgSubject").value = "";
+                document.getElementById("msgBody").value    = "";
+                setTimeout(() => { hideCompose(); switchTab("sent"); }, 1500);
+            } else {
+                error.textContent = data.message || "Failed to send";
+                error.classList.add("show");
+            }
+        } catch {
+            error.textContent = "Network error.";
+            error.classList.add("show");
+        }
+    }
+
+    loadContacts();
+    loadUnread();
+    loadMessages();
+</script>
+
+</body>
+</html>

@@ -1,104 +1,117 @@
 const db = require("../config/db");
 
 
-// RECORD PAYMENT
+// RECORD PAYMENT — commission auto-detected from student profile
 
 const recordPayment = async (req, res) => {
 
     try {
 
-        const {
-            student_id,
-            amount,
-            payment_source
-        } = req.body;
+        const { student_id, amount } = req.body;
 
-        let tutor_commission = 0;
-        let bm_profit = 0;
+        const studentResult = await db.query(
+            "SELECT student_source, referred_by FROM users WHERE id = $1 AND role = 'student'",
+            [student_id]
+        );
 
-        // BM BROUGHT STUDENT
-
-        if(payment_source === "bm") {
-
-            tutor_commission = amount * 0.4;
-
-            bm_profit = amount * 0.6;
-
+        if (studentResult.rows.length === 0) {
+            return res.status(404).json({ message: "Student not found" });
         }
 
-        // TUTOR BROUGHT STUDENT
+        const { student_source, referred_by } = studentResult.rows[0];
+        const source = student_source || "bm";
 
-        else if(payment_source === "tutor") {
+        const tutor_commission = source === "tutor" ? amount * 0.6 : amount * 0.4;
+        const bm_profit        = source === "tutor" ? amount * 0.4 : amount * 0.6;
 
-            tutor_commission = amount * 0.6;
+        await db.query(
+            `INSERT INTO payments (student_id, tutor_id, amount, tutor_commission, bm_profit, payment_source)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [student_id, referred_by || null, amount, tutor_commission, bm_profit, source]
+        );
 
-            bm_profit = amount * 0.4;
-
-        }
-
-        const query = `
-
-            INSERT INTO payments
-            (
-                student_id,
-                amount,
-                tutor_commission,
-                bm_profit,
-                payment_source
-            )
-
-            VALUES ($1, $2, $3, $4, $5)
-
-        `;
-
-        await db.query(query, [
-            student_id,
-            amount,
+        res.status(201).json({
+            message: "Payment recorded successfully",
             tutor_commission,
             bm_profit,
-            payment_source
-        ]);
+            payment_source: source
+        });
 
-        res.send("Payment Recorded Successfully");
-
-    } catch(error) {
+    } catch (error) {
 
         console.log(error.message);
-
-        res.send("Payment Failed");
+        res.status(500).json({ message: "Payment failed" });
 
     }
 
 };
 
 
-
-// GET PAYMENTS
+// GET ALL PAYMENTS (admin view)
 
 const getPayments = async (req, res) => {
 
     try {
 
-        const result = await db.query(
-
-            "SELECT * FROM payments ORDER BY id DESC"
-
-        );
+        const result = await db.query(`
+            SELECT
+                payments.id,
+                students.fullname AS student_name,
+                tutors.fullname   AS tutor_name,
+                payments.amount,
+                payments.tutor_commission,
+                payments.bm_profit,
+                payments.payment_source,
+                payments.created_at
+            FROM payments
+            JOIN users students ON payments.student_id = students.id
+            LEFT JOIN users tutors ON payments.tutor_id = tutors.id
+            ORDER BY payments.id DESC
+        `);
 
         res.json(result.rows);
 
-    } catch(error) {
+    } catch (error) {
 
         console.log(error.message);
-
-        res.send("Failed to fetch payments");
+        res.status(500).json({ message: "Failed to fetch payments" });
 
     }
 
 };
 
 
-module.exports = {
-    recordPayment,
-    getPayments
+// GET EARNINGS FOR LOGGED-IN TUTOR
+
+const getTutorEarnings = async (req, res) => {
+
+    try {
+
+        const result = await db.query(`
+            SELECT
+                payments.id,
+                students.fullname AS student_name,
+                payments.amount,
+                payments.tutor_commission,
+                payments.created_at
+            FROM payments
+            JOIN users students ON payments.student_id = students.id
+            WHERE payments.tutor_id = $1
+            ORDER BY payments.id DESC
+        `, [req.user.id]);
+
+        const total = result.rows.reduce((sum, r) => sum + parseFloat(r.tutor_commission || 0), 0);
+
+        res.json({ payments: result.rows, total_earnings: total });
+
+    } catch (error) {
+
+        console.log(error.message);
+        res.status(500).json({ message: "Failed to fetch earnings" });
+
+    }
+
 };
+
+
+module.exports = { recordPayment, getPayments, getTutorEarnings };

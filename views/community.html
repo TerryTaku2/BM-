@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Community</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .channel-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.4rem;
+            text-decoration: none;
+            color: inherit;
+            transition: box-shadow 0.15s, border-color 0.15s;
+            display: block;
+        }
+        .channel-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            border-color: #3b82f6;
+        }
+        .channel-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #1e40af, #3b82f6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+        }
+        .channel-name { font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.3rem; }
+        .channel-meta { font-size: 0.82rem; color: #64748b; display: flex; gap: 1rem; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/community" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="javascript:history.back()" class="nav-btn">&#8592; Back</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>&#127757; Community</h1>
+        <p>Join subject discussions with classmates and tutors</p>
+    </div>
+
+    <div id="channelGrid" class="channel-grid">
+        <p style="color:#94a3b8">Loading channels...</p>
+    </div>
+
+</div>
+
+<script>
+    const levelColors = {
+        "O-Level": "#1e40af",
+        "A-Level": "#7c3aed",
+        "IGCSE":   "#0e7490"
+    };
+
+    const subjectIcons = ["&#128218;","&#127770;","&#9878;","&#128200;","&#127760;","&#128196;","&#127358;","&#128161;","&#9881;","&#127794;"];
+
+    async function loadChannels() {
+        const grid = document.getElementById("channelGrid");
+        try {
+            const res = await fetch("/community/subjects");
+            if (res.status === 401) return window.location.href = "/login";
+            const subjects = await res.json();
+
+            if (!subjects.length) {
+                grid.innerHTML = '<p style="color:#94a3b8;grid-column:1/-1">No subjects available. Enrol in a subject to join its community.</p>';
+                return;
+            }
+
+            grid.innerHTML = subjects.map((s, i) => {
+                const icon  = subjectIcons[i % subjectIcons.length];
+                const color = levelColors[s.level] || "#1e40af";
+                return `
+                    <a class="channel-card" href="/community/subject/${s.id}">
+                        <div class="channel-icon" style="background:linear-gradient(135deg,${color},${color}99)">${icon}</div>
+                        <div class="channel-name">${s.subject_name}</div>
+                        <div class="channel-meta">
+                            <span class="badge badge-blue" style="font-size:0.72rem">${s.level}</span>
+                            <span>${s.post_count} post${s.post_count != 1 ? "s" : ""}</span>
+                        </div>
+                    </a>
+                `;
+            }).join("");
+        } catch {
+            grid.innerHTML = '<p style="color:#ef4444">Failed to load channels.</p>';
+        }
+    }
+
+    loadChannels();
+</script>
+
+</body>
+</html>

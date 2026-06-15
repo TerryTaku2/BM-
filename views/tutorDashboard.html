@@ -1,13 +1,239 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Tutor Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Tutor Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>Tutor Dashboard</h1>
+<nav class="navbar">
+    <a href="/tutor-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <span id="userName">Loading...</span>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
 
-    <p>Welcome Tutor</p>
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1 id="welcomeText">Welcome!</h1>
+        <p>Tutor Portal — share your referral code to earn 60% commission</p>
+    </div>
+
+    <div class="action-links">
+        <a href="/upload-notes">&#8593; Upload Notes</a>
+        <a href="/notes-library">&#128196; Notes Library</a>
+        <a href="/create-test">&#128221; Create Test</a>
+        <a href="/messages">&#128140; Messages</a>
+        <a href="/community">&#127757; Community</a>
+    </div>
+
+    <!-- Referral Code Card -->
+    <div class="card" style="background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;margin-bottom:1.5rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+            <div>
+                <div style="font-size:0.85rem;opacity:0.85;margin-bottom:0.3rem">Your Referral Code</div>
+                <div id="referralCode" style="font-size:2rem;font-weight:700;letter-spacing:3px">Loading...</div>
+                <div style="font-size:0.8rem;opacity:0.75;margin-top:0.3rem">Students who register with this code give you 60% commission</div>
+            </div>
+            <button onclick="copyCode()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:0.6rem 1.2rem;border-radius:6px;cursor:pointer;font-size:0.9rem" id="copyBtn">
+                Copy Code
+            </button>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="totalMyStudents">—</div>
+            <div class="stat-label">My Referred Students</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="totalEarnings">—</div>
+            <div class="stat-label">Total Earnings</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="totalSubjects">—</div>
+            <div class="stat-label">Available Subjects</div>
+        </div>
+    </div>
+
+    <!-- My Referred Students -->
+    <div class="card">
+        <h2>My Students</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Email</th>
+                        <th>Joined</th>
+                    </tr>
+                </thead>
+                <tbody id="myStudentsTable">
+                    <tr class="loading-row"><td colspan="3">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Earnings History -->
+    <div class="card">
+        <h2>Earnings History</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Payment Amount</th>
+                        <th>My Commission (60%)</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="earningsTable">
+                    <tr class="loading-row"><td colspan="4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Available Subjects -->
+    <div class="card">
+        <h2>Available Subjects</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject Name</th>
+                        <th>Code</th>
+                        <th>Level</th>
+                    </tr>
+                </thead>
+                <tbody id="subjectsTable">
+                    <tr class="loading-row"><td colspan="3">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let myReferralCode = "";
+
+    function fmt(n) { return "$" + parseFloat(n).toFixed(2); }
+
+    function copyCode() {
+        if (!myReferralCode) return;
+        navigator.clipboard.writeText(myReferralCode).then(() => {
+            const btn = document.getElementById("copyBtn");
+            btn.textContent = "Copied!";
+            setTimeout(() => btn.textContent = "Copy Code", 2000);
+        });
+    }
+
+    async function loadUser() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        document.getElementById("userName").textContent = user.fullname;
+        document.getElementById("welcomeText").textContent = `Welcome, ${user.fullname}!`;
+    }
+
+    async function loadTutorInfo() {
+        try {
+            const res = await fetch("/api/tutor-info");
+            if (!res.ok) return;
+            const data = await res.json();
+            myReferralCode = data.referral_code || "—";
+            document.getElementById("referralCode").textContent = myReferralCode;
+        } catch {}
+    }
+
+    async function loadMyStudents() {
+        const tbody = document.getElementById("myStudentsTable");
+        try {
+            const res = await fetch("/api/my-students");
+            if (!res.ok) return;
+            const rows = await res.json();
+            document.getElementById("totalMyStudents").textContent = rows.length;
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No referred students yet. Share your referral code!</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><strong>${r.fullname}</strong></td>
+                    <td>${r.email}</td>
+                    <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Failed to load students.</td></tr>';
+        }
+    }
+
+    async function loadEarnings() {
+        const tbody = document.getElementById("earningsTable");
+        try {
+            const res = await fetch("/my-earnings");
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById("totalEarnings").textContent = fmt(data.total_earnings);
+
+            if (!data.payments.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No earnings yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.payments.map(r => `
+                <tr>
+                    <td>${r.student_name}</td>
+                    <td>${fmt(r.amount)}</td>
+                    <td><strong>${fmt(r.tutor_commission)}</strong></td>
+                    <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Failed to load earnings.</td></tr>';
+        }
+    }
+
+    async function loadSubjects() {
+        const tbody = document.getElementById("subjectsTable");
+        try {
+            const res = await fetch("/subjects");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+            document.getElementById("totalSubjects").textContent = rows.length;
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No subjects available yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><strong>${r.subject_name}</strong></td>
+                    <td><span class="badge badge-blue">${r.subject_code}</span></td>
+                    <td>${r.level}</td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Failed to load subjects.</td></tr>';
+        }
+    }
+
+    loadUser();
+    loadTutorInfo();
+    loadMyStudents();
+    loadEarnings();
+    loadSubjects();
+</script>
 
 </body>
 </html>

@@ -1,25 +1,92 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Login</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>BMLC Login</h1>
+<div class="auth-wrapper">
+    <div class="auth-card">
 
-    <form action="/login" method="POST">
+        <div class="auth-logo">
+            <div class="logo-text">BMLC</div>
+            <div class="logo-sub">E-Learning Management System</div>
+        </div>
 
-        <input type="email" name="email" placeholder="Email" required>
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in to your account</p>
 
-        <br><br>
+        <div class="alert alert-error" id="errorMsg"></div>
 
-        <input type="password" name="password" placeholder="Password" required>
+        <form id="loginForm">
 
-        <br><br>
+            <div class="form-group">
+                <label for="email">Email address</label>
+                <input type="email" id="email" name="email" placeholder="you@example.com" required>
+            </div>
 
-        <button type="submit">Login</button>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Your password" required>
+            </div>
 
-    </form>
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                Sign In
+            </button>
+
+        </form>
+
+        <p class="auth-link">
+            Don't have an account? <a href="/register">Register here</a>
+        </p>
+
+    </div>
+</div>
+
+<script>
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const btn = document.getElementById("submitBtn");
+        const errorMsg = document.getElementById("errorMsg");
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Signing in...';
+        errorMsg.classList.remove("show");
+
+        const body = {
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value
+        };
+
+        try {
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                window.location.href = data.redirect;
+            } else {
+                errorMsg.textContent = data.message || "Login failed";
+                errorMsg.classList.add("show");
+                btn.disabled = false;
+                btn.textContent = "Sign In";
+            }
+        } catch {
+            errorMsg.textContent = "Network error. Please try again.";
+            errorMsg.classList.add("show");
+            btn.disabled = false;
+            btn.textContent = "Sign In";
+        }
+    });
+</script>
 
 </body>
 </html>

@@ -1,46 +1,112 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Add Subject</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Add Subject</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>Add Subject</h1>
+<nav class="navbar">
+    <a href="/admin-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/admin-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
 
-    <form action="/add-subject" method="POST">
+<div class="container" style="max-width:560px">
 
-        <input
-            type="text"
-            name="subject_name"
-            placeholder="Subject Name"
-            required
-        >
+    <div class="card">
+        <h2>Add New Subject</h2>
 
-        <br><br>
+        <div class="alert alert-success" id="successMsg"></div>
+        <div class="alert alert-error" id="errorMsg"></div>
 
-        <input
-            type="text"
-            name="subject_code"
-            placeholder="Subject Code"
-            required
-        >
+        <form id="addSubjectForm">
 
-        <br><br>
+            <div class="form-group">
+                <label for="subject_name">Subject Name</label>
+                <input type="text" id="subject_name" name="subject_name" placeholder="e.g. Mathematics" required>
+            </div>
 
-        <input
-            type="text"
-            name="level"
-            placeholder="Level"
-            required
-        >
+            <div class="form-group">
+                <label for="subject_code">Subject Code</label>
+                <input type="text" id="subject_code" name="subject_code" placeholder="e.g. MATH101" required>
+            </div>
 
-        <br><br>
+            <div class="form-group">
+                <label for="level">Level</label>
+                <select id="level" name="level" required>
+                    <option value="">Select level</option>
+                    <optgroup label="O-Level (Forms 1–4)">
+                        <option value="Form 1">Form 1</option>
+                        <option value="Form 2">Form 2</option>
+                        <option value="Form 3">Form 3</option>
+                        <option value="Form 4">Form 4</option>
+                    </optgroup>
+                    <optgroup label="A-Level (Forms 5–6)">
+                        <option value="Form 5">Form 5</option>
+                        <option value="Form 6">Form 6</option>
+                    </optgroup>
+                </select>
+            </div>
 
-        <button type="submit">
-            Add Subject
-        </button>
+            <button type="submit" class="btn btn-success" id="submitBtn">
+                Add Subject
+            </button>
 
-    </form>
+        </form>
+    </div>
+
+</div>
+
+<script>
+    document.getElementById("addSubjectForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const btn = document.getElementById("submitBtn");
+        const successMsg = document.getElementById("successMsg");
+        const errorMsg = document.getElementById("errorMsg");
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving...';
+        successMsg.classList.remove("show");
+        errorMsg.classList.remove("show");
+
+        const body = {
+            subject_name: document.getElementById("subject_name").value.trim(),
+            subject_code: document.getElementById("subject_code").value.trim().toUpperCase(),
+            level: document.getElementById("level").value
+        };
+
+        try {
+            const res = await fetch("/add-subject", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                successMsg.textContent = data.message;
+                successMsg.classList.add("show");
+                e.target.reset();
+            } else {
+                errorMsg.textContent = data.message || "Failed to add subject";
+                errorMsg.classList.add("show");
+            }
+        } catch {
+            errorMsg.textContent = "Network error. Please try again.";
+            errorMsg.classList.add("show");
+        }
+
+        btn.disabled = false;
+        btn.textContent = "Add Subject";
+    });
+</script>
 
 </body>
 </html>

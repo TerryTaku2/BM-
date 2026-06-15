@@ -4,18 +4,16 @@ const router = express.Router();
 
 const {
     enrollStudent,
-    getEnrollments
+    getEnrollments,
+    getMyEnrollments
 } = require("../controllers/enrollmentController");
 
 
-// ENROLL STUDENT
-
 router.post("/enroll-student", enrollStudent);
 
-
-// GET ENROLLMENTS
-
 router.get("/enrollments", getEnrollments);
+
+router.get("/my-enrollments", getMyEnrollments);
 
 
 module.exports = router;

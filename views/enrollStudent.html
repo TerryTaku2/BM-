@@ -1,37 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Enroll Student</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Enroll Student</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>Enroll Student</h1>
+<nav class="navbar">
+    <a href="/admin-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/admin-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
 
-    <form action="/enroll-student" method="POST">
+<div class="container" style="max-width:560px">
 
-        <input
-            type="number"
-            name="student_id"
-            placeholder="Student ID"
-            required
-        >
+    <div class="card">
+        <h2>Enroll Student</h2>
 
-        <br><br>
+        <div class="alert alert-success" id="successMsg"></div>
+        <div class="alert alert-error" id="errorMsg"></div>
 
-        <input
-            type="number"
-            name="subject_id"
-            placeholder="Subject ID"
-            required
-        >
+        <form id="enrollForm">
 
-        <br><br>
+            <div class="form-group">
+                <label for="student_id">Student</label>
+                <select id="student_id" name="student_id" required>
+                    <option value="">Loading students...</option>
+                </select>
+            </div>
 
-        <button type="submit">
-            Enroll Student
-        </button>
+            <div class="form-group">
+                <label for="subject_id">Subject</label>
+                <select id="subject_id" name="subject_id" required>
+                    <option value="">Loading subjects...</option>
+                </select>
+            </div>
 
-    </form>
+            <button type="submit" class="btn btn-success" id="submitBtn">
+                Enroll Student
+            </button>
+
+        </form>
+    </div>
+
+</div>
+
+<script>
+    async function populateDropdowns() {
+        try {
+            const [studentsRes, subjectsRes] = await Promise.all([
+                fetch("/api/students"),
+                fetch("/subjects")
+            ]);
+
+            if (studentsRes.status === 401 || subjectsRes.status === 401) {
+                return window.location.href = "/login";
+            }
+
+            const students = await studentsRes.json();
+            const subjects = await subjectsRes.json();
+
+            const studentSel = document.getElementById("student_id");
+            studentSel.innerHTML = '<option value="">Select a student</option>' +
+                students.map(s => `<option value="${s.id}">${s.fullname} (${s.email})</option>`).join("");
+
+            const subjectSel = document.getElementById("subject_id");
+            subjectSel.innerHTML = '<option value="">Select a subject</option>' +
+                subjects.map(s => `<option value="${s.id}">${s.subject_name} — ${s.level} (${s.subject_code})</option>`).join("");
+        } catch {
+            document.getElementById("errorMsg").textContent = "Failed to load data.";
+            document.getElementById("errorMsg").classList.add("show");
+        }
+    }
+
+    document.getElementById("enrollForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const btn = document.getElementById("submitBtn");
+        const successMsg = document.getElementById("successMsg");
+        const errorMsg = document.getElementById("errorMsg");
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Enrolling...';
+        successMsg.classList.remove("show");
+        errorMsg.classList.remove("show");
+
+        const body = {
+            student_id: document.getElementById("student_id").value,
+            subject_id: document.getElementById("subject_id").value
+        };
+
+        try {
+            const res = await fetch("/enroll-student", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                successMsg.textContent = data.message;
+                successMsg.classList.add("show");
+                e.target.reset();
+                populateDropdowns();
+            } else {
+                errorMsg.textContent = data.message || "Enrollment failed";
+                errorMsg.classList.add("show");
+            }
+        } catch {
+            errorMsg.textContent = "Network error. Please try again.";
+            errorMsg.classList.add("show");
+        }
+
+        btn.disabled = false;
+        btn.textContent = "Enroll Student";
+    });
+
+    populateDropdowns();
+</script>
 
 </body>
 </html>

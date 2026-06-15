@@ -1,11 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>Welcome to BMLC Dashboard</h1>
+<nav class="navbar">
+    <a href="/dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <span id="userName">Loading...</span>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="welcome-banner">
+        <h1 id="welcomeText">Welcome to BMLC ELMS</h1>
+        <p>E-Learning Management System</p>
+    </div>
+    <div class="card">
+        <p style="color:#64748b">Redirecting you to your dashboard...</p>
+    </div>
+</div>
+
+<script>
+    async function redirect() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        document.getElementById("userName").textContent = user.fullname;
+        document.getElementById("welcomeText").textContent = `Welcome, ${user.fullname}!`;
+
+        const map = {
+            student: "/student-dashboard",
+            tutor: "/tutor-dashboard",
+            parent: "/parent-dashboard",
+            admin: "/admin-dashboard",
+            superadmin: "/superadmin-dashboard"
+        };
+        setTimeout(() => window.location.href = map[user.role] || "/login", 800);
+    }
+
+    redirect();
+</script>
 
 </body>
 </html>

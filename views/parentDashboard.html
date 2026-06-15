@@ -1,11 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Parent Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Parent Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-    <h1>Parent Dashboard</h1>
+<nav class="navbar">
+    <a href="/parent-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <span id="userName">Loading...</span>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1 id="welcomeText">Welcome!</h1>
+        <p>Parent Portal — monitor your child's academic progress</p>
+    </div>
+
+    <div class="action-links">
+        <a href="/messages">&#128140; Messages</a>
+        <a href="/community">&#127757; Community</a>
+    </div>
+
+    <div class="card">
+        <h2>Available Subjects</h2>
+        <p style="color:#64748b;font-size:0.9rem;margin-bottom:1rem">
+            Below are all subjects currently offered at BMLC.
+            Contact administration to enrol your child.
+        </p>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject Name</th>
+                        <th>Code</th>
+                        <th>Level</th>
+                    </tr>
+                </thead>
+                <tbody id="subjectsTable">
+                    <tr class="loading-row"><td colspan="3">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    async function loadUser() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        document.getElementById("userName").textContent = user.fullname;
+        document.getElementById("welcomeText").textContent = `Welcome, ${user.fullname}!`;
+    }
+
+    async function loadSubjects() {
+        const tbody = document.getElementById("subjectsTable");
+        try {
+            const res = await fetch("/subjects");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No subjects available yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><strong>${r.subject_name}</strong></td>
+                    <td><span class="badge badge-blue">${r.subject_code}</span></td>
+                    <td>${r.level}</td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Failed to load subjects.</td></tr>';
+        }
+    }
+
+    loadUser();
+    loadSubjects();
+</script>
 
 </body>
 </html>

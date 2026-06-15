@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Notes Library</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/student-dashboard" class="nav-btn" id="backLink">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>Notes Library</h1>
+        <p>Select a subject to view and download resources</p>
+    </div>
+
+    <div class="form-group" style="max-width:400px;margin-bottom:1.5rem">
+        <label for="subject_id">Filter by Subject</label>
+        <select id="subject_id">
+            <option value="">Loading subjects...</option>
+        </select>
+    </div>
+
+    <div class="alert alert-error" id="errorMsg"></div>
+
+    <div class="card">
+        <h2 id="notesTitle">Select a subject above</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Uploaded By</th>
+                        <th>File</th>
+                        <th>Date</th>
+                        <th>Download</th>
+                    </tr>
+                </thead>
+                <tbody id="notesTable">
+                    <tr><td colspan="5" class="empty-state">Select a subject to load resources.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function fileIcon(mime) {
+        if (!mime) return "&#128196;";
+        if (mime.includes("pdf")) return "&#128196;";
+        if (mime.includes("word") || mime.includes("document")) return "&#128196;";
+        if (mime.includes("powerpoint") || mime.includes("presentation")) return "&#128202;";
+        if (mime.includes("video") || mime.includes("mp4")) return "&#127909;";
+        return "&#128196;";
+    }
+
+    async function loadSubjects() {
+        const sel = document.getElementById("subject_id");
+        try {
+            const res = await fetch("/subjects");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+            sel.innerHTML = '<option value="">— Select subject —</option>' +
+                rows.map(r => `<option value="${r.id}">${r.subject_name} (${r.level})</option>`).join("");
+        } catch {
+            sel.innerHTML = '<option value="">Failed to load</option>';
+        }
+    }
+
+    async function loadNotes(subjectId) {
+        const tbody = document.getElementById("notesTable");
+        const title = document.getElementById("notesTitle");
+        const errorMsg = document.getElementById("errorMsg");
+
+        errorMsg.classList.remove("show");
+
+        if (!subjectId) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Select a subject to load resources.</td></tr>';
+            title.textContent = "Select a subject above";
+            return;
+        }
+
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Loading...</td></tr>';
+
+        try {
+            const res = await fetch(`/notes/subject/${subjectId}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+                errorMsg.textContent = data.message || "Failed to load notes";
+                errorMsg.classList.add("show");
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Could not load resources.</td></tr>';
+                return;
+            }
+
+            const sel = document.getElementById("subject_id");
+            title.textContent = sel.options[sel.selectedIndex].text;
+
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No resources uploaded for this subject yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td>${fileIcon(r.file_type)} <strong>${r.title}</strong></td>
+                    <td>${r.tutor_name}</td>
+                    <td style="font-size:0.8rem;color:#64748b">${r.original_name}</td>
+                    <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <a href="/uploads/notes/${r.filename || ''}" download="${r.original_name}"
+                           style="color:#3b82f6;font-weight:600;text-decoration:none;font-size:0.85rem">
+                            &#8595; Download
+                        </a>
+                    </td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Failed to load resources.</td></tr>';
+        }
+    }
+
+    // Set dashboard back link based on role
+    async function setBackLink() {
+        try {
+            const res = await fetch("/api/me");
+            if (!res.ok) return window.location.href = "/login";
+            const user = await res.json();
+            const map = {
+                student: "/student-dashboard",
+                tutor: "/tutor-dashboard",
+                parent: "/parent-dashboard",
+                admin: "/admin-dashboard",
+                superadmin: "/superadmin-dashboard"
+            };
+            document.getElementById("backLink").href = map[user.role] || "/dashboard";
+        } catch {}
+    }
+
+    document.getElementById("subject_id").addEventListener("change", (e) => {
+        loadNotes(e.target.value);
+    });
+
+    // Check if notes table has filename - need to update query
+    setBackLink();
+    loadSubjects();
+</script>
+
+</body>
+</html>

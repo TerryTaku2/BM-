@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Upload Notes</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/tutor-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/tutor-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:600px">
+
+    <div class="card">
+        <h2>Upload Notes / Resources</h2>
+        <p style="color:#64748b;margin-bottom:1.5rem;font-size:0.9rem">Accepted: PDF, Word, PowerPoint, Video (max 100 MB)</p>
+
+        <div class="alert alert-success" id="successMsg"></div>
+        <div class="alert alert-error" id="errorMsg"></div>
+
+        <form id="uploadForm" enctype="multipart/form-data">
+
+            <div class="form-group">
+                <label for="subject_id">Subject</label>
+                <select id="subject_id" name="subject_id" required>
+                    <option value="">Loading subjects...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="title">Resource Title</label>
+                <input type="text" id="title" name="title" placeholder="e.g. Chapter 3 — Cell Division" required>
+            </div>
+
+            <div class="form-group">
+                <label for="file">File</label>
+                <input type="file" id="file" name="file"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.mpeg" required
+                    style="border:2px dashed #cbd5e1;border-radius:8px;padding:1rem;width:100%;background:#f8fafc;cursor:pointer">
+            </div>
+
+            <div id="fileInfo" style="font-size:0.82rem;color:#64748b;margin-bottom:1rem;display:none"></div>
+
+            <div id="progressWrap" style="display:none;margin-bottom:1rem">
+                <div style="background:#e2e8f0;border-radius:99px;height:8px;overflow:hidden">
+                    <div id="progressBar" style="height:100%;background:#3b82f6;width:0%;transition:width 0.2s"></div>
+                </div>
+                <p id="progressText" style="font-size:0.8rem;color:#64748b;margin-top:0.3rem">Uploading...</p>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="submitBtn">Upload Resource</button>
+
+        </form>
+    </div>
+
+    <!-- Previously uploaded notes -->
+    <div class="card">
+        <h2>My Uploaded Resources</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr><th>Title</th><th>Subject</th><th>File</th><th>Date</th><th></th></tr>
+                </thead>
+                <tbody id="notesTable">
+                    <tr class="loading-row"><td colspan="5">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    async function loadSubjects() {
+        const sel = document.getElementById("subject_id");
+        try {
+            const res = await fetch("/subjects");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+            sel.innerHTML = '<option value="">Select subject</option>' +
+                rows.map(r => `<option value="${r.id}">${r.subject_name} (${r.level})</option>`).join("");
+        } catch {
+            sel.innerHTML = '<option value="">Failed to load</option>';
+        }
+    }
+
+    document.getElementById("file").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        const info = document.getElementById("fileInfo");
+        if (file) {
+            const mb = (file.size / 1024 / 1024).toFixed(2);
+            info.textContent = `Selected: ${file.name} (${mb} MB)`;
+            info.style.display = "block";
+        }
+    });
+
+    async function loadMyNotes() {
+        const tbody = document.getElementById("notesTable");
+        try {
+            const res = await fetch("/notes");
+            if (!res.ok) return;
+            const rows = await res.json();
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No resources uploaded yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><strong>${r.title}</strong></td>
+                    <td>${r.subject_name}</td>
+                    <td style="font-size:0.8rem;color:#64748b">${r.original_name}</td>
+                    <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <button onclick="deleteNote(${r.id}, this)"
+                            style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.82rem">Delete</button>
+                    </td>
+                </tr>
+            `).join("");
+        } catch {}
+    }
+
+    async function deleteNote(id, btn) {
+        if (!confirm("Delete this resource?")) return;
+        btn.textContent = "...";
+        try {
+            const res = await fetch(`/notes/${id}`, { method: "DELETE" });
+            if (res.ok) loadMyNotes();
+        } catch {}
+    }
+
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const btn = document.getElementById("submitBtn");
+        const successMsg = document.getElementById("successMsg");
+        const errorMsg   = document.getElementById("errorMsg");
+        const progressWrap = document.getElementById("progressWrap");
+        const progressBar  = document.getElementById("progressBar");
+        const progressText = document.getElementById("progressText");
+
+        successMsg.classList.remove("show");
+        errorMsg.classList.remove("show");
+        btn.disabled = true;
+        progressWrap.style.display = "block";
+
+        const formData = new FormData(e.target);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/notes/upload");
+
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+                const pct = Math.round((event.loaded / event.total) * 100);
+                progressBar.style.width = pct + "%";
+                progressText.textContent = `Uploading... ${pct}%`;
+            }
+        };
+
+        xhr.onload = () => {
+            progressWrap.style.display = "none";
+            btn.disabled = false;
+
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status === 201) {
+                successMsg.textContent = data.message;
+                successMsg.classList.add("show");
+                e.target.reset();
+                document.getElementById("fileInfo").style.display = "none";
+                loadMyNotes();
+            } else {
+                errorMsg.textContent = data.message || "Upload failed";
+                errorMsg.classList.add("show");
+            }
+        };
+
+        xhr.onerror = () => {
+            progressWrap.style.display = "none";
+            btn.disabled = false;
+            errorMsg.textContent = "Network error. Please try again.";
+            errorMsg.classList.add("show");
+        };
+
+        xhr.send(formData);
+    });
+
+    loadSubjects();
+    loadMyNotes();
+</script>
+
+</body>
+</html>

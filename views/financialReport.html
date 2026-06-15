@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Financial Report</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/admin-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/admin-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <button onclick="window.print()" class="nav-btn" style="cursor:pointer">Print Report</button>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>Financial Report</h1>
+        <p id="reportDate">Generated on —</p>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="totalRevenue">—</div>
+            <div class="stat-label">Total Revenue</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="totalTutorPayouts">—</div>
+            <div class="stat-label">Tutor Payouts</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="totalBmProfit">—</div>
+            <div class="stat-label">BM Net Profit</div>
+        </div>
+        <div class="stat-card purple">
+            <div class="stat-value" id="totalPayments">—</div>
+            <div class="stat-label">Total Payments</div>
+        </div>
+    </div>
+
+    <!-- Monthly Breakdown -->
+    <div class="card">
+        <h2>Monthly Breakdown</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Payments</th>
+                        <th>Revenue</th>
+                        <th>Tutor Payouts</th>
+                        <th>BM Profit</th>
+                    </tr>
+                </thead>
+                <tbody id="monthlyTable">
+                    <tr class="loading-row"><td colspan="5">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Per-Tutor Breakdown -->
+    <div class="card">
+        <h2>Tutor Commission Breakdown</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tutor</th>
+                        <th>Referral Code</th>
+                        <th>Students Paid</th>
+                        <th>Revenue Generated</th>
+                        <th>Tutor Earnings</th>
+                        <th>BM Portion</th>
+                    </tr>
+                </thead>
+                <tbody id="tutorTable">
+                    <tr class="loading-row"><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- All Payments with receipt links -->
+    <div class="card">
+        <h2>All Payments</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student</th>
+                        <th>Tutor</th>
+                        <th>Amount</th>
+                        <th>Tutor Commission</th>
+                        <th>BM Profit</th>
+                        <th>Source</th>
+                        <th>Date</th>
+                        <th>Receipt</th>
+                    </tr>
+                </thead>
+                <tbody id="paymentsTable">
+                    <tr class="loading-row"><td colspan="9">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function fmt(n) { return "$" + parseFloat(n).toFixed(2); }
+
+    async function loadReport() {
+        document.getElementById("reportDate").textContent =
+            "Generated on " + new Date().toLocaleString();
+
+        try {
+            const res = await fetch("/api/financial-report");
+            if (res.status === 401) return window.location.href = "/login";
+            const data = await res.json();
+
+            const s = data.summary;
+            document.getElementById("totalRevenue").textContent     = fmt(s.total_revenue);
+            document.getElementById("totalTutorPayouts").textContent = fmt(s.total_tutor_payouts);
+            document.getElementById("totalBmProfit").textContent     = fmt(s.total_bm_profit);
+            document.getElementById("totalPayments").textContent     = s.total_payments;
+
+            // Monthly
+            const monthly = document.getElementById("monthlyTable");
+            if (!data.monthly.length) {
+                monthly.innerHTML = '<tr><td colspan="5" class="empty-state">No data yet.</td></tr>';
+            } else {
+                monthly.innerHTML = data.monthly.map(r => `
+                    <tr>
+                        <td><strong>${r.month}</strong></td>
+                        <td>${r.payments}</td>
+                        <td>${fmt(r.revenue)}</td>
+                        <td>${fmt(r.tutor_payouts)}</td>
+                        <td><strong>${fmt(r.bm_profit)}</strong></td>
+                    </tr>
+                `).join("");
+            }
+
+            // By tutor
+            const tutorTbl = document.getElementById("tutorTable");
+            if (!data.by_tutor.length) {
+                tutorTbl.innerHTML = '<tr><td colspan="6" class="empty-state">No tutor referral payments yet.</td></tr>';
+            } else {
+                tutorTbl.innerHTML = data.by_tutor.map(r => `
+                    <tr>
+                        <td><strong>${r.tutor_name}</strong></td>
+                        <td><span class="badge badge-green">${r.referral_code}</span></td>
+                        <td>${r.students_paid}</td>
+                        <td>${fmt(r.revenue_generated)}</td>
+                        <td><strong>${fmt(r.tutor_earnings)}</strong></td>
+                        <td>${fmt(r.bm_from_tutor)}</td>
+                    </tr>
+                `).join("");
+            }
+
+        } catch (e) {
+            console.error(e);
+        }
+
+        // All payments
+        try {
+            const res2 = await fetch("/payments");
+            if (!res2.ok) return;
+            const rows = await res2.json();
+            const tbody = document.getElementById("paymentsTable");
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No payments yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td>${r.student_name}</td>
+                    <td>${r.tutor_name || '<span style="color:#94a3b8">BM Direct</span>'}</td>
+                    <td>${fmt(r.amount)}</td>
+                    <td>${fmt(r.tutor_commission)}</td>
+                    <td>${fmt(r.bm_profit)}</td>
+                    <td><span class="badge ${r.payment_source === 'bm' ? 'badge-blue' : 'badge-green'}">${r.payment_source.toUpperCase()}</span></td>
+                    <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                    <td><a href="/receipt/${r.id}" target="_blank" style="color:#3b82f6;text-decoration:none;font-size:0.82rem">View</a></td>
+                </tr>
+            `).join("");
+        } catch (e) {}
+    }
+
+    loadReport();
+</script>
+
+</body>
+</html>

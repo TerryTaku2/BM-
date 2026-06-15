@@ -1,5 +1,11 @@
 const db = require("../config/db");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+
+function buildReferralCode(fullname, userId) {
+    const prefix = fullname.replace(/\s+/g, "").substring(0, 5).toUpperCase();
+    return prefix + String(userId).padStart(3, "0");
+}
 
 
 // REGISTER USER
@@ -8,44 +14,54 @@ const registerUser = async (req, res) => {
 
     try {
 
-        const {
-            fullname,
-            email,
-            password,
-            role,
-            referral_code
-        } = req.body;
+        const { fullname, email, password, role, referral_code } = req.body;
+
+        const existing = await db.query(
+            "SELECT id FROM users WHERE email = $1",
+            [email]
+        );
+
+        if (existing.rows.length > 0) {
+            return res.status(400).json({ message: "Email already registered" });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const query = `
+        // Resolve referral code — only for students
+        let referred_by = null;
+        let student_source = "bm";
 
-            INSERT INTO users
-            (fullname, email, password, role, referral_code)
+        if (role === "student" && referral_code) {
+            const tutor = await db.query(
+                "SELECT id FROM users WHERE referral_code = $1 AND role = 'tutor'",
+                [referral_code.toUpperCase()]
+            );
+            if (tutor.rows.length > 0) {
+                referred_by = tutor.rows[0].id;
+                student_source = "tutor";
+            }
+        }
 
-            VALUES ($1, $2, $3, $4, $5)
+        const result = await db.query(
+            `INSERT INTO users (fullname, email, password, role, referred_by, student_source)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [fullname, email, hashedPassword, role, referred_by, student_source]
+        );
 
-            RETURNING *;
+        const userId = result.rows[0].id;
 
-        `;
+        // Auto-generate unique referral code for tutors
+        if (role === "tutor") {
+            const code = buildReferralCode(fullname, userId);
+            await db.query("UPDATE users SET referral_code = $1 WHERE id = $2", [code, userId]);
+        }
 
-        const values = [
-            fullname,
-            email,
-            hashedPassword,
-            role,
-            referral_code
-        ];
+        res.status(201).json({ message: "Registration successful" });
 
-        await db.query(query, values);
-
-        res.send("User Registered Successfully");
-
-    } catch(error) {
+    } catch (error) {
 
         console.log(error.message);
-
-        res.send("Registration Failed");
+        res.status(500).json({ message: "Registration failed" });
 
     }
 
@@ -61,88 +77,55 @@ const loginUser = async (req, res) => {
 
         const { email, password } = req.body;
 
-        // CHECK USER
-
         const result = await db.query(
-
             "SELECT * FROM users WHERE email = $1",
-
             [email]
         );
 
-        // USER NOT FOUND
-
-        if(result.rows.length === 0) {
-
-            return res.send("User not found");
-
+        if (result.rows.length === 0) {
+            return res.status(401).json({ message: "Invalid email or password" });
         }
 
         const user = result.rows[0];
 
-        // CHECK PASSWORD
+        const validPassword = await bcrypt.compare(password, user.password);
 
-        const validPassword = await bcrypt.compare(
-            password,
-            user.password
-        );
-
-        if(!validPassword) {
-
-            return res.send("Invalid password");
-
+        if (!validPassword) {
+            return res.status(401).json({ message: "Invalid email or password" });
         }
 
-        // LOGIN SUCCESS
+        const token = jwt.sign(
+            { id: user.id, fullname: user.fullname, email: user.email, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
 
-        // ROLE-BASED REDIRECT
+        res.cookie("token", token, {
+            httpOnly: true,
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
 
-if(user.role === "student") {
+        const redirectMap = {
+            student: "/student-dashboard",
+            tutor: "/tutor-dashboard",
+            parent: "/parent-dashboard",
+            admin: "/admin-dashboard",
+            superadmin: "/superadmin-dashboard"
+        };
 
-    return res.redirect("/student-dashboard");
+        res.json({
+            message: "Login successful",
+            redirect: redirectMap[user.role] || "/dashboard"
+        });
 
-}
-
-if(user.role === "tutor") {
-
-    return res.redirect("/tutor-dashboard");
-
-}
-
-if(user.role === "parent") {
-
-    return res.redirect("/parent-dashboard");
-
-}
-
-if(user.role === "admin") {
-
-    return res.redirect("/admin-dashboard");
-
-}
-
-if(user.role === "superadmin") {
-
-    return res.redirect("/superadmin-dashboard");
-
-}
-
-
-// DEFAULT
-
-res.send("Login Successful");
-    } catch(error) {
+    } catch (error) {
 
         console.log(error.message);
-
-        res.send("Login Failed");
+        res.status(500).json({ message: "Login failed" });
 
     }
 
 };
 
 
-module.exports = {
-    registerUser,
-    loginUser
-};
+module.exports = { registerUser, loginUser };

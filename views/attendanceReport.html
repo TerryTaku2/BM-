@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Attendance Report</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/admin-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/admin-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <button onclick="window.print()" class="nav-btn" style="cursor:pointer">Print</button>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>Attendance Report</h1>
+        <p>Full attendance records across all subjects</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="totalRecords">—</div>
+            <div class="stat-label">Total Records</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="presentCount">—</div>
+            <div class="stat-label">Present</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="avgDuration">—</div>
+            <div class="stat-label">Avg Duration (min)</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem">
+            <h2 style="margin:0">All Attendance Records</h2>
+            <input type="text" id="searchBox" placeholder="Search student or subject..."
+                style="padding:0.5rem 0.8rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;width:220px">
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th>Joined</th>
+                        <th>Left</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTable">
+                    <tr class="loading-row"><td colspan="7">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let allRows = [];
+
+    async function loadAttendance() {
+        const tbody = document.getElementById("attendanceTable");
+        try {
+            const res = await fetch("/attendance");
+            if (res.status === 401) return window.location.href = "/login";
+            allRows = await res.json();
+
+            document.getElementById("totalRecords").textContent = allRows.length;
+            const present = allRows.filter(r => r.status === "present").length;
+            document.getElementById("presentCount").textContent = present;
+
+            const withDuration = allRows.filter(r => r.duration_minutes != null);
+            const avg = withDuration.length
+                ? Math.round(withDuration.reduce((s, r) => s + Number(r.duration_minutes), 0) / withDuration.length)
+                : 0;
+            document.getElementById("avgDuration").textContent = avg || "—";
+
+            renderTable(allRows);
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load records.</td></tr>';
+        }
+    }
+
+    function renderTable(rows) {
+        const tbody = document.getElementById("attendanceTable");
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No records found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td><strong>${r.student_name}</strong></td>
+                <td>${r.subject_name}</td>
+                <td>${new Date(r.lesson_date).toLocaleDateString()}</td>
+                <td>${r.joined_at ? new Date(r.joined_at).toLocaleTimeString() : "—"}</td>
+                <td>${r.left_at ? new Date(r.left_at).toLocaleTimeString() : "—"}</td>
+                <td>${r.duration_minutes != null ? r.duration_minutes + " min" : "—"}</td>
+                <td><span class="badge ${r.status === "present" ? "badge-green" : "badge-blue"}">${r.status}</span></td>
+            </tr>
+        `).join("");
+    }
+
+    document.getElementById("searchBox").addEventListener("input", (e) => {
+        const q = e.target.value.toLowerCase();
+        renderTable(allRows.filter(r =>
+            r.student_name.toLowerCase().includes(q) ||
+            r.subject_name.toLowerCase().includes(q)
+        ));
+    });
+
+    loadAttendance();
+</script>
+
+</body>
+</html>

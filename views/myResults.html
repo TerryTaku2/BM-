@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — My Results</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/student-dashboard" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/student-dashboard" class="nav-btn">&#8592; Dashboard</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="welcome-banner">
+        <h1>My Test Results</h1>
+        <p>View scores and performance across all subjects</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="totalTests">—</div>
+            <div class="stat-label">Tests Taken</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="avgScore">—</div>
+            <div class="stat-label">Average Score</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="bestScore">—</div>
+            <div class="stat-label">Best Score</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Results History</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Test Title</th>
+                        <th>Subject</th>
+                        <th>Score</th>
+                        <th>Total</th>
+                        <th>Percentage</th>
+                        <th>Grade</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable">
+                    <tr class="loading-row"><td colspan="7">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function grade(pct) {
+        pct = parseFloat(pct);
+        if (pct >= 80) return '<span class="badge badge-green">A</span>';
+        if (pct >= 65) return '<span class="badge badge-blue">B</span>';
+        if (pct >= 50) return '<span class="badge" style="background:#fef9c3;color:#713f12">C</span>';
+        if (pct >= 40) return '<span class="badge badge-orange">D</span>';
+        return '<span class="badge" style="background:#fee2e2;color:#991b1b">F</span>';
+    }
+
+    async function loadResults() {
+        const tbody = document.getElementById("resultsTable");
+        try {
+            const res = await fetch("/my-results");
+            if (res.status === 401) return window.location.href = "/login";
+            const rows = await res.json();
+
+            document.getElementById("totalTests").textContent = rows.length;
+
+            if (rows.length) {
+                const avg = rows.reduce((s, r) => s + parseFloat(r.percentage), 0) / rows.length;
+                const best = Math.max(...rows.map(r => parseFloat(r.percentage)));
+                document.getElementById("avgScore").textContent = avg.toFixed(1) + "%";
+                document.getElementById("bestScore").textContent = best.toFixed(1) + "%";
+            } else {
+                document.getElementById("avgScore").textContent = "—";
+                document.getElementById("bestScore").textContent = "—";
+            }
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No tests taken yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><strong>${r.title}</strong></td>
+                    <td>${r.subject_name}</td>
+                    <td>${r.score}</td>
+                    <td>${r.total_marks}</td>
+                    <td><strong>${parseFloat(r.percentage).toFixed(1)}%</strong></td>
+                    <td>${grade(r.percentage)}</td>
+                    <td>${new Date(r.submitted_at).toLocaleDateString()}</td>
+                </tr>
+            `).join("");
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load results.</td></tr>';
+        }
+    }
+
+    loadResults();
+</script>
+
+</body>
+</html>

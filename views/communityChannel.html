@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMLC — Community Channel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .post-list { display: flex; flex-direction: column; gap: 0.8rem; }
+        .post-item {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 1.2rem 1.4rem;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            transition: box-shadow 0.15s, border-color 0.15s;
+        }
+        .post-item:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.07); border-color: #93c5fd; }
+        .post-item.pinned { border-left: 3px solid #f59e0b; background: #fffbeb; }
+        .post-title { font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.4rem; }
+        .post-preview { font-size: 0.85rem; color: #64748b; margin-bottom: 0.6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .post-meta { font-size: 0.78rem; color: #94a3b8; display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: center; }
+        .compose-panel { display: none; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/community" class="brand">BMLC ELMS</a>
+    <div class="nav-links">
+        <a href="/community" class="nav-btn">&#8592; Community</a>
+        <a href="/logout" class="nav-btn logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:800px">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+        <div>
+            <h1 id="channelTitle" style="font-size:1.5rem;font-weight:700;color:#1e293b">Loading...</h1>
+            <p id="channelMeta" style="color:#64748b;font-size:0.88rem"></p>
+        </div>
+        <button class="btn btn-primary" onclick="toggleCompose()">+ New Post</button>
+    </div>
+
+    <!-- COMPOSE NEW POST -->
+    <div class="card compose-panel" id="composePanel">
+        <h2>Start a Discussion</h2>
+        <div class="alert alert-success" id="postSuccess"></div>
+        <div class="alert alert-error"   id="postError"></div>
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" id="postTitle" placeholder="Ask a question or start a topic..." maxlength="200">
+        </div>
+        <div class="form-group">
+            <label>Details</label>
+            <textarea id="postBody" rows="5" placeholder="Explain your question or share what you know..." style="resize:vertical"></textarea>
+        </div>
+        <div style="display:flex;gap:0.8rem">
+            <button class="btn btn-primary" onclick="submitPost()">Post</button>
+            <button class="btn" onclick="toggleCompose()" style="background:#f1f5f9;color:#475569">Cancel</button>
+        </div>
+    </div>
+
+    <!-- POST LIST -->
+    <div id="postList" class="post-list">
+        <p style="color:#94a3b8;text-align:center;padding:2rem">Loading posts...</p>
+    </div>
+
+</div>
+
+<script>
+    const subjectId = window.location.pathname.split("/").pop();
+    let myRole = "";
+
+    async function loadMe() {
+        const res = await fetch("/api/me");
+        if (!res.ok) return window.location.href = "/login";
+        const user = await res.json();
+        myRole = user.role;
+    }
+
+    async function loadPosts() {
+        const list = document.getElementById("postList");
+        try {
+            const res = await fetch(`/community/subject/${subjectId}`);
+            if (res.status === 403) {
+                list.innerHTML = '<p style="color:#ef4444;text-align:center;padding:2rem">You must be enrolled in this subject to view its community.</p>';
+                return;
+            }
+            if (!res.ok) throw new Error();
+            const posts = await res.json();
+
+            // Update header
+            if (posts.length > 0) {
+                document.getElementById("channelMeta").textContent = `${posts.length} discussion${posts.length !== 1 ? "s" : ""}`;
+            } else {
+                document.getElementById("channelMeta").textContent = "No discussions yet — be the first!";
+            }
+
+            if (!posts.length) {
+                list.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:2rem">No posts yet. Start the first discussion!</p>';
+                return;
+            }
+
+            list.innerHTML = posts.map(p => `
+                <a class="post-item${p.is_pinned ? " pinned" : ""}" href="/community/post/${p.id}">
+                    ${p.is_pinned ? '<span style="font-size:0.75rem;color:#f59e0b;font-weight:600;display:block;margin-bottom:0.3rem">&#128204; PINNED</span>' : ""}
+                    <div class="post-title">${escHtml(p.title)}</div>
+                    <div class="post-preview">${escHtml(p.body)}</div>
+                    <div class="post-meta">
+                        <span>&#128100; ${p.author_name} <span class="badge badge-blue" style="font-size:0.7rem;margin-left:3px">${p.author_role}</span></span>
+                        <span>&#128172; ${p.reply_count} repl${p.reply_count != 1 ? "ies" : "y"}</span>
+                        <span>&#10084; ${p.like_count}</span>
+                        <span>&#128336; ${timeAgo(p.created_at)}</span>
+                    </div>
+                </a>
+            `).join("");
+        } catch {
+            list.innerHTML = '<p style="color:#ef4444;text-align:center;padding:2rem">Failed to load posts.</p>';
+        }
+    }
+
+    async function loadSubjectName() {
+        try {
+            const res = await fetch("/subjects");
+            const subjects = await res.json();
+            const s = subjects.find(s => s.id == subjectId);
+            if (s) document.getElementById("channelTitle").textContent = `&#127757; ${s.subject_name}`;
+        } catch {}
+    }
+
+    function toggleCompose() {
+        const panel = document.getElementById("composePanel");
+        panel.style.display = panel.style.display === "none" || !panel.style.display ? "block" : "none";
+    }
+
+    async function submitPost() {
+        const title   = document.getElementById("postTitle").value.trim();
+        const body    = document.getElementById("postBody").value.trim();
+        const success = document.getElementById("postSuccess");
+        const error   = document.getElementById("postError");
+
+        success.classList.remove("show");
+        error.classList.remove("show");
+
+        if (!title || !body) {
+            error.textContent = "Please fill in both title and details.";
+            error.classList.add("show");
+            return;
+        }
+
+        try {
+            const res = await fetch("/community/posts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subject_id: subjectId, title, body })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                success.textContent = "Post created!";
+                success.classList.add("show");
+                document.getElementById("postTitle").value = "";
+                document.getElementById("postBody").value  = "";
+                setTimeout(() => {
+                    document.getElementById("composePanel").style.display = "none";
+                    window.location.href = `/community/post/${data.post_id}`;
+                }, 800);
+            } else {
+                error.textContent = data.message || "Failed to post";
+                error.classList.add("show");
+            }
+        } catch {
+            error.textContent = "Network error.";
+            error.classList.add("show");
+        }
+    }
+
+    function escHtml(str) {
+        const d = document.createElement("div");
+        d.textContent = str || "";
+        return d.innerHTML;
+    }
+
+    function timeAgo(dateStr) {
+        const diff = (Date.now() - new Date(dateStr)) / 1000;
+        if (diff < 60) return "just now";
+        if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+        if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+        return Math.floor(diff / 86400) + "d ago";
+    }
+
+    loadMe();
+    loadSubjectName();
+    loadPosts();
+</script>
+
+</body>
+</html>

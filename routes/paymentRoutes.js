@@ -4,7 +4,8 @@ const router = express.Router();
 
 const {
     recordPayment,
-    getPayments
+    getPayments,
+    getTutorEarnings
 } = require("../controllers/paymentController");
 
 
@@ -13,9 +14,14 @@ const {
 router.post("/record-payment", recordPayment);
 
 
-// GET PAYMENTS
+// GET ALL PAYMENTS (admin)
 
 router.get("/payments", getPayments);
+
+
+// GET TUTOR EARNINGS (tutor's own)
+
+router.get("/my-earnings", getTutorEarnings);
 
 
 module.exports = router;

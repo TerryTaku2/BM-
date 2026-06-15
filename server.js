@@ -105,30 +105,6 @@ app.use("/uploads", express.static("uploads"));
 
 
 // ======================================
-// ONE-TIME SETUP: PROMOTE FIRST ADMIN
-// Remove this route after first use
-// ======================================
-
-app.get("/setup-admin", async (req, res) => {
-    const secret = req.query.secret;
-    if (secret !== "BM-SETUP-2026") {
-        return res.status(403).send("Forbidden");
-    }
-    try {
-        const result = await db.query(
-            "UPDATE users SET role = 'superadmin' WHERE email = 'terrencemuromba@gmail.com' RETURNING fullname, email, role"
-        );
-        if (result.rows.length === 0) {
-            return res.send("User not found. Register first at /register, then visit this URL again.");
-        }
-        res.send(`Done! ${result.rows[0].fullname} (${result.rows[0].email}) is now ${result.rows[0].role}. Remove this route now.`);
-    } catch (err) {
-        res.status(500).send("Error: " + err.message);
-    }
-});
-
-
-// ======================================
 // API: CURRENT USER
 // ======================================
 
